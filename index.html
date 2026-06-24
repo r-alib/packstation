@@ -184,6 +184,19 @@ h2{font-family:var(--disp); font-weight:600; font-size:19px; margin:0 0 4px; let
 .linkbtn:hover{color:var(--err)}
 .item.unpack .iname{text-decoration:line-through; text-decoration-color:var(--faint)}
 .reasontag{font-size:11px; color:var(--err); font-weight:600}
+/* quantity emphasis + multi-unit counter */
+.qtybadge{display:inline-block; font-size:13px; font-weight:700; padding:2px 10px; border-radius:999px;
+  background:#2b2412; color:var(--warn); border:1px solid #5a4a1c; font-family:var(--mono); margin-left:9px; vertical-align:middle}
+.item.multi{border-color:#5a4a1c; background:#1b1810}
+.item.multi.checked{border-color:var(--accent); background:#11211a}
+.counter{display:flex; align-items:center; gap:4px}
+.counter .step{width:32px; height:32px; border-radius:8px; border:2px solid var(--line); background:var(--raised); color:var(--ink); font-size:19px; line-height:1; display:grid; place-items:center; font-weight:700}
+.counter .step:active{transform:scale(.92)}
+.counter .step:disabled{opacity:.3}
+.counter .cnt{min-width:50px; text-align:center; font-family:var(--mono); font-weight:700; font-size:16px; color:var(--muted)}
+.counter .cnt b{color:var(--warn); font-size:19px}
+.counter.full .cnt b{color:var(--accent)}
+.st-blocked{background:#2a1116; color:var(--err)}
 
 .orderfoot{display:flex; gap:12px; margin-top:18px; flex-wrap:wrap}
 .orderfoot .spacer{flex:1}
@@ -259,7 +272,7 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
   <div class="box">
     <div class="brand" style="justify-content:center; margin-bottom:6px"><span class="dot"></span><div>Pack Station Live<small>Calipokehouse · shared packing</small></div></div>
     <h1 id="gateTitle">Enter your name to join the shift</h1>
-    <p class="sub" id="gateSub">Your name is visible to teammates and shows up in the per-packer report.</p>
+    <p class="sub" id="gateSub">Your name is visible to teammates and shows up in the report. Type <b>admin</b> for the manager view.</p>
     <input id="nameInput" class="tinput" autocomplete="off" placeholder="e.g. Joe" maxlength="24">
     <button class="btn primary lg" id="enterBtn" style="width:100%">Join shift</button>
     <div class="setupnote" id="setupNote" style="display:none"></div>
@@ -315,8 +328,9 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
     <div class="eyebrow">Choose platform</div>
     <h1 style="margin-bottom:16px">Pick a platform to pack</h1>
     <div class="pgrid" id="pgrid"></div>
-    <div style="margin-top:24px; display:flex; gap:12px; flex-wrap:wrap">
+    <div id="adminActions" style="margin-top:24px; display:flex; gap:12px; flex-wrap:wrap">
       <button class="btn primary" id="finishBtn">📋 Shift report</button>
+      <button class="btn ghost" id="loadDataBtn">⚙ Load data</button>
       <button class="btn hide" id="pullOrdersBtn">🔄 Pull new orders</button>
       <button class="btn hide" id="updInvBtn">🔄 Update inventory</button>
       <button class="btn danger ghost" id="wipeBtn">Clear shift (manager)</button>
@@ -412,6 +426,7 @@ let S = { date:DATE, platforms:{}, inventory:{}, barcodeIdx:{} };
 let curScreen='seed', curPlatformKey=null;
 let activeOrder=null, activePick=null, claimRef=null, hbTimer=null;
 let soundOn=true;
+let IS_ADMIN=false;
 let _ordSource=null, _invSource=null;
 const _proxy={ord:null, inv:null};
 
@@ -492,11 +507,11 @@ function connect(){
   root.child('orders').on('value', snap=>{
     const platforms={};
     snap.forEach(c=>{ const v=c.val(); if(!v) return; const pk=v.platform; (platforms[pk]=platforms[pk]||{name:pk,orders:[]});
-      platforms[pk].orders.push({_key:c.key, trackingId:v.trackingId, items:v.items||[], status:v.status||'pending', claim:v.claim||null, packedBy:v.packedBy||''}); });
+      platforms[pk].orders.push({_key:c.key, trackingId:v.trackingId, items:v.items||[], status:v.status||'pending', claim:v.claim||null, packedBy:v.packedBy||'', blockReason:v.blockReason||''}); });
     S.platforms=platforms; renderCurrent();
   });
 
-  root.child('meta').once('value').then(snap=>{ if(snap.exists()) goPlatforms(); else show('seed'); });
+  root.child('meta').once('value').then(snap=>{ const has=snap.exists(); if(IS_ADMIN){ if(has) goPlatforms(); else show('seed'); } else { goPlatforms(); } });
 }
 
 async function seedOrders(buf, sourceMeta){
@@ -611,19 +626,29 @@ function renderCurrent(){
 /* ============================================================
    PLATFORMS
    ============================================================ */
-function platformStats(p){ const all=p.orders.length; const done=p.orders.filter(o=>o.status!=='pending').length;
-  const now=Date.now(); const locked=p.orders.filter(o=>o.claim && now-(o.claim.at||0)<STALE_MS && o.status==='pending').length;
-  return {all,done,locked,complete:all>0&&done===all}; }
+function platformStats(p){ const all=p.orders.length; const done=p.orders.filter(o=>o.status==='packed').length;
+  const now=Date.now(); const locked=p.orders.filter(o=>o.claim && now-(o.claim.at||0)<STALE_MS && o.status!=='packed').length;
+  const blocked=p.orders.filter(o=>o.status==='unpacked').length;
+  return {all,done,locked,blocked,complete:all>0&&done===all}; }
 function globalStats(){ let all=0,done=0; for(const k in S.platforms){const s=platformStats(S.platforms[k]); all+=s.all; done+=s.done;} return {all,done}; }
 function renderPlatforms(){
-  $('#pullOrdersBtn').classList.toggle('hide', !_ordSource);
-  $('#updInvBtn').classList.toggle('hide', !_invSource);
-  const g=$('#pgrid'); g.innerHTML='';
+  const aa=$('#adminActions'); if(aa) aa.classList.toggle('hide', !IS_ADMIN);
+  if(IS_ADMIN){ $('#pullOrdersBtn').classList.toggle('hide', !_ordSource); $('#updInvBtn').classList.toggle('hide', !_invSource); }
+  const g=$('#pgrid');
+  if(Object.keys(S.platforms).length===0){
+    if(IS_ADMIN) g.innerHTML='<div class="empty">No data loaded yet.<br><button class="btn primary" id="goSeedBtn" style="margin-top:12px">Load data →</button></div>';
+    else g.innerHTML='<div class="empty">⏳ Waiting for the admin to load today’s data.<br><span style="font-size:13px">This screen updates automatically when it’s ready.</span><br><button class="btn" id="staffRefresh" style="margin-top:14px">↻ Refresh</button></div>';
+    const gs=$('#goSeedBtn'); if(gs) gs.onclick=()=>show('seed');
+    const sr=$('#staffRefresh'); if(sr) sr.onclick=()=>{ renderPlatforms(); toast('Refreshed','info',1400); };
+    return;
+  }
+  g.innerHTML='';
   for(const key in S.platforms){
     const p=S.platforms[key]; const st=platformStats(p); const pct=st.all?Math.round(st.done/st.all*100):0;
     const el=document.createElement('button');
     el.className='platform'+(st.complete?' done':'')+(st.locked&&!st.complete?' locked':'');
-    el.innerHTML=(st.locked&&!st.complete?'<div class="lockbadge">🔒 '+st.locked+' in progress</div>':'')+
+    const badge = st.complete ? '' : (st.locked ? '<div class="lockbadge">🔒 '+st.locked+' in progress</div>' : (st.blocked ? '<div class="lockbadge" style="color:var(--err)">⛔ '+st.blocked+' not packed</div>' : ''));
+    el.innerHTML=badge+
       '<div class="pname">'+esc(p.name)+'</div>'+
       '<div class="bar"><i style="width:'+pct+'%"></i></div>'+
       '<div class="meta"><span>Packed <b>'+st.done+'</b> of <b>'+st.all+'</b></span><span>'+pct+'%</span></div>';
@@ -654,7 +679,7 @@ async function scanLabel(val){
     else { flash('err');beep('err'); toast('Label not found: '+val,'err',3200); }
     return;
   }
-  if(order.status!=='pending'){ flash('err');beep('warn'); toast('Order '+order.trackingId+' already packed ('+(order.packedBy||'')+')','warn',3200); activeOrder={key:order._key,platform:curPlatformKey,trackingId:order.trackingId}; activePick=null; setMode('items'); renderOrderArea(); return; }
+  if(order.status==='packed'){ flash('err');beep('warn'); toast('Order '+order.trackingId+' already packed ('+(order.packedBy||'')+')','warn',3200); activeOrder={key:order._key,platform:curPlatformKey,trackingId:order.trackingId}; activePick=null; setMode('items'); renderOrderArea(); return; }
 
   const cRef=root.child('orders/'+order._key+'/claim');
   let res;
@@ -666,7 +691,8 @@ async function scanLabel(val){
 
   claimRef=cRef; cRef.onDisconnect().set(null); startHeartbeat();
   activeOrder={key:order._key, platform:curPlatformKey, trackingId:order.trackingId};
-  activePick=order.items.map(()=>({checked:false,status:'ok',reason:''}));
+  activePick=order.items.map(it=>({count:0, qty:(it.qty||1), status:'ok', reason:''}));
+  if(order.status==='unpacked'){ toast('This order was previously NOT packed — re-attempting','info',3000); }
   flash('ok');beep('ok'); setMode('items'); renderOrderArea();
 }
 
@@ -677,13 +703,14 @@ function releaseIfHolding(){ if(claimRef){ try{claimRef.onDisconnect().cancel();
 function scanItem(val){
   const order=findByKey(activeOrder.key); if(!order || !activePick){ setMode('label'); return; }
   const bkey=S.barcodeIdx[norm(val)];
+  const room=i=>activePick[i].status==='ok' && activePick[i].count<(activePick[i].qty||1);
   let idx=-1;
-  if(bkey) idx=order.items.findIndex((it,i)=>it.invKey===bkey && !activePick[i].checked && activePick[i].status==='ok');
-  if(idx<0){ const t=norm(val); idx=order.items.findIndex((it,i)=>!activePick[i].checked && activePick[i].status==='ok' && (norm(it.name)===t||norm(it.name).includes(t))); }
-  if(idx>=0){ activePick[idx].checked=true; flash('ok');beep('ok'); toast('✓ '+order.items[idx].name,'ok',1500); renderOrderArea(); return; }
+  if(bkey) idx=order.items.findIndex((it,i)=>it.invKey===bkey && room(i));
+  if(idx<0){ const t=norm(val); idx=order.items.findIndex((it,i)=>room(i) && (norm(it.name)===t||norm(it.name).includes(t))); }
+  if(idx>=0){ const pk=activePick[idx]; pk.count++; const q=pk.qty||1; flash('ok');beep('ok'); toast('✓ '+order.items[idx].name+(q>1?' ('+pk.count+'/'+q+')':''), 'ok', 1400); renderOrderArea(); return; }
   if(bkey){ const inOrder=order.items.findIndex(it=>it.invKey===bkey);
-    if(inOrder>=0 && activePick[inOrder].checked){ toast('Already checked','warn',2000);beep('warn'); }
-    else if(inOrder>=0){ toast('Item is marked as “can’t pack”','warn',2400);beep('warn'); }
+    if(inOrder>=0 && activePick[inOrder].status!=='ok'){ toast('Item is marked as “can’t pack”','warn',2400);beep('warn'); }
+    else if(inOrder>=0){ toast('All '+(activePick[inOrder].qty||1)+' unit(s) already scanned','warn',2200);beep('warn'); }
     else { flash('err');beep('err'); const iv=S.inventory[bkey]; toast('Item “'+(iv?iv.name:val)+'” is not in this order','err',3000); }
   } else { flash('err');beep('err'); toast('Unknown item barcode: '+val,'err',2800); }
 }
@@ -700,12 +727,14 @@ function renderOrderArea(){
   }
   const order=findByKey(activeOrder.key);
   if(!order){ area.innerHTML='<div class="empty">Order unavailable.</div>'; return; }
-  const readonly = order.status!=='pending' || !activePick;
+  const readonly = !activePick;
 
-  if(readonly && order.status!=='pending'){
+  if(readonly){
+    const packed = order.status==='packed';
     area.innerHTML='<div class="card"><div class="orderhead"><div><div class="eyebrow" style="margin-bottom:4px">Label</div><div class="trk">'+esc(order.trackingId)+'</div></div>'+
-      (order.status==='packed'?'<span class="statustag st-packed">packed</span>':'<span class="statustag st-partial">partial</span>')+'</div>'+
-      '<p class="sub" style="margin-top:10px">Packed by: <b>'+esc(order.packedBy||'—')+'</b></p>'+
+      (packed?'<span class="statustag st-packed">packed</span>':'<span class="statustag st-blocked">not packed</span>')+'</div>'+
+      '<p class="sub" style="margin-top:10px">'+(packed?'Packed by: ':'Last handled by: ')+'<b>'+esc(order.packedBy||'—')+'</b></p>'+
+      (!packed&&order.blockReason?'<p class="reasontag" style="margin-top:6px">⛔ '+esc(order.blockReason)+'</p>':'')+
       '<div class="orderfoot"><button class="btn" onclick="backToScan()">← Scan next</button></div></div>';
     return;
   }
@@ -714,14 +743,22 @@ function renderOrderArea(){
   let html='<div class="card"><div class="orderhead"><div><div class="eyebrow" style="margin-bottom:4px">Label</div><div class="trk">'+esc(order.trackingId)+'</div></div>'+stTag+'<div class="spacer"></div><div class="pill">Items: <b>'+order.items.length+'</b></div></div><div class="items">';
   order.items.forEach((it,idx)=>{
     const iv=S.inventory[it.invKey]||{}; const img=iv.image||PLACEHOLDER; const loc=iv.location||'—'; const stock=(iv.stock==null)?null:iv.stock;
-    const pk=activePick[idx];
-    let stockChip=''; if(stock!=null){ const cls=stock<=0?'zero':(stock<it.qty?'low':''); stockChip='<span class="chip stock '+cls+'">stock <b>'+stock+'</b></span>'; }
-    const cls=pk.status!=='ok'?'unpack':(pk.checked?'checked':'');
+    const pk=activePick[idx]; const q=pk.qty||1; const multi=q>1; const full=pk.count>=q;
+    let stockChip=''; if(stock!=null){ const cls=stock<=0?'zero':(stock<q?'low':''); stockChip='<span class="chip stock '+cls+'">stock <b>'+stock+'</b></span>'; }
+    const cls = pk.status!=='ok' ? 'unpack' : ((full?'checked':'')+(multi?' multi':''));
+    let control;
+    if(pk.status!=='ok') control='<button class="chk" disabled>✓</button>';
+    else if(multi) control='<div class="counter'+(full?' full':'')+'">'+
+        '<button class="step" data-dec="'+idx+'" '+(pk.count<=0?'disabled':'')+'>−</button>'+
+        '<span class="cnt"><b>'+pk.count+'</b>/'+q+'</span>'+
+        '<button class="step" data-inc="'+idx+'" '+(full?'disabled':'')+'>+</button></div>';
+    else control='<button class="chk" data-toggle="'+idx+'">✓</button>';
+    const qtyMark = multi ? '<span class="qtybadge">× '+q+'</span>' : '';
     html+='<div class="item '+cls+'">'+
-      '<button class="chk" data-toggle="'+idx+'" '+(pk.status!=='ok'?'disabled':'')+'>✓</button>'+
+      control+
       '<img class="thumb" src="'+esc(img)+'" onerror="this.src=\''+PLACEHOLDER+'\'">'+
-      '<div><div class="iname">'+esc(it.name)+'</div>'+(it.variation?'<div class="ivar">'+esc(it.variation)+'</div>':'')+
-      '<div class="ichips"><span class="chip loc">📍 '+esc(loc)+'</span><span class="chip qty">qty <b>'+it.qty+'</b></span>'+stockChip+
+      '<div><div class="iname">'+esc(it.name)+qtyMark+'</div>'+(it.variation?'<div class="ivar">'+esc(it.variation)+'</div>':'')+
+      '<div class="ichips"><span class="chip loc">📍 '+esc(loc)+'</span>'+(multi?'':'<span class="chip qty">qty <b>'+q+'</b></span>')+stockChip+
       (pk.status!=='ok'?'<span class="reasontag">⛔ '+reasonLabel(pk.status)+(pk.reason?': '+esc(pk.reason):'')+'</span>':'')+'</div></div>'+
       '<div class="iact">'+
       (pk.status==='ok'
@@ -730,44 +767,57 @@ function renderOrderArea(){
       '</div></div>';
   });
   html+='</div>';
-  const okItems=activePick.filter(p=>p.status==='ok').length;
-  const allResolved=activePick.every(p=>p.status!=='ok'||p.checked);
-  html+='<div class="orderfoot"><button class="btn ghost" data-checkall>Check all ('+okItems+')</button><button class="btn ghost" data-cancel>Cancel</button><div class="spacer"></div><button class="btn primary lg" data-confirm '+(allResolved?'':'disabled')+'>✓ Confirm pick</button></div>';
-  if(!allResolved){ const left=activePick.filter(p=>p.status==='ok'&&!p.checked).length; html+='<div class="progress-mini"><span><b class="mono">'+left+'</b> left to check</span></div>'; }
+  const allResolved=activePick.every(p=>p.status!=='ok'||p.count>=(p.qty||1));
+  const anyBlock=activePick.some(p=>p.status!=='ok');
+  const unitsLeft=activePick.reduce((s,p)=>s+(p.status==='ok'?Math.max(0,(p.qty||1)-p.count):0),0);
+  const confirmLabel = anyBlock ? '✓ Confirm — mark NOT packed' : '✓ Confirm pick';
+  html+='<div class="orderfoot"><button class="btn ghost" data-checkall>Check all</button><button class="btn ghost" data-cancel>Cancel</button><div class="spacer"></div><button class="btn primary lg'+(anyBlock?' danger':'')+'" data-confirm '+(allResolved?'':'disabled')+'>'+confirmLabel+'</button></div>';
+  if(anyBlock) html+='<div class="progress-mini" style="color:var(--err)"><span>⛔ One or more items can’t be packed — the entire order will be marked NOT packed.</span></div>';
+  else if(!allResolved) html+='<div class="progress-mini"><span><b class="mono">'+unitsLeft+'</b> unit(s) left to scan</span></div>';
   html+='</div>';
   area.innerHTML=html;
   wireOrder(order);
 }
 
 function wireOrder(order){
-  $$('#orderArea [data-toggle]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.toggle; if(activePick[i].status!=='ok')return; activePick[i].checked=!activePick[i].checked; if(activePick[i].checked)beep('ok'); renderOrderArea(); });
+  $$('#orderArea [data-toggle]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.toggle; const pk=activePick[i]; if(pk.status!=='ok')return; const q=pk.qty||1; pk.count = pk.count>=q?0:q; if(pk.count>0)beep('ok'); renderOrderArea(); });
+  $$('#orderArea [data-inc]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.inc; const pk=activePick[i]; const q=pk.qty||1; if(pk.status!=='ok'||pk.count>=q)return; pk.count++; beep('ok'); renderOrderArea(); });
+  $$('#orderArea [data-dec]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.dec; const pk=activePick[i]; if(pk.status!=='ok'||pk.count<=0)return; pk.count--; renderOrderArea(); });
   $$('#orderArea [data-menu]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const idx=b.dataset.menu; $$('#orderArea .menupop').forEach(p=>{if(p.dataset.pop!==idx)p.classList.add('hide');}); $('#orderArea [data-pop="'+idx+'"]').classList.toggle('hide'); });
-  $$('#orderArea [data-reason]').forEach(b=>b.onclick=()=>{ const [reason,idx]=b.dataset.reason.split(','); let note=''; if(reason==='other'){note=prompt('Reason:','');if(note===null)return;} activePick[+idx].status=reason; activePick[+idx].reason=note||''; activePick[+idx].checked=false; beep('warn'); renderOrderArea(); });
+  $$('#orderArea [data-reason]').forEach(b=>b.onclick=()=>{ const [reason,idx]=b.dataset.reason.split(','); let note=''; if(reason==='other'){note=prompt('Reason:','');if(note===null)return;} activePick[+idx].status=reason; activePick[+idx].reason=note||''; activePick[+idx].count=0; beep('warn'); renderOrderArea(); });
   $$('#orderArea [data-restore]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.restore; activePick[i].status='ok'; activePick[i].reason=''; renderOrderArea(); });
-  const ca=$('#orderArea [data-checkall]'); if(ca)ca.onclick=()=>{ activePick.forEach(p=>{if(p.status==='ok')p.checked=true;}); beep('ok'); renderOrderArea(); };
+  const ca=$('#orderArea [data-checkall]'); if(ca)ca.onclick=()=>{ activePick.forEach(p=>{if(p.status==='ok')p.count=p.qty||1;}); beep('ok'); renderOrderArea(); };
   const cancel=$('#orderArea [data-cancel]'); if(cancel)cancel.onclick=()=>{ releaseIfHolding(); setMode('label'); renderOrderArea(); focusScan(); };
   const conf=$('#orderArea [data-confirm]'); if(conf)conf.onclick=()=>confirmOrder(order);
 }
 
 async function confirmOrder(order){
-  if(!activePick.every(p=>p.status!=='ok'||p.checked)){ toast('Check all items or set a reason','warn'); return; }
+  if(!activePick.every(p=>p.status!=='ok'||p.count>=(p.qty||1))){ toast('Scan all units, or mark items as can’t pack','warn'); return; }
   const conf=$('#orderArea [data-confirm]'); if(conf){conf.disabled=true; conf.textContent='Saving…';}
+  const blockers=[]; order.items.forEach((it,i)=>{ if(activePick[i].status!=='ok') blockers.push(it.name+' ('+reasonLabel(activePick[i].status)+(activePick[i].reason?': '+activePick[i].reason:'')+')'); });
+  const isBlocked = blockers.length>0;
+  const blockReason = isBlocked ? ('Cannot pack: '+blockers.join('; ')) : '';
   try{
-    for(let i=0;i<order.items.length;i++){
-      const p=activePick[i]; if(p.status==='ok' && p.checked){
+    if(!isBlocked){ // only a fully packable order decrements stock
+      for(let i=0;i<order.items.length;i++){
         const iv=S.inventory[order.items[i].invKey];
-        if(iv && iv.stock!=null){ await root.child('inventory/'+safeKey(order.items[i].invKey)+'/stock').transaction(s=> (s==null?null:s-order.items[i].qty)); }
+        if(iv && iv.stock!=null){ await root.child('inventory/'+safeKey(order.items[i].invKey)+'/stock').transaction(s=> (s==null?null:s-(order.items[i].qty||1))); }
       }
     }
-    const items=order.items.map((it,i)=>({...it, checked:activePick[i].checked, status:activePick[i].status, reason:activePick[i].reason}));
-    const anyUnpack=activePick.some(p=>p.status!=='ok');
+    const items=order.items.map((it,i)=>{
+      const p=activePick[i];
+      if(p.status!=='ok') return {...it, packed:false, status:p.status, reason:p.reason||'', count:0};
+      if(isBlocked)         return {...it, packed:false, status:'blocked', reason:blockReason, count:p.count};
+      return {...it, packed:true, status:'ok', reason:'', count:p.count};
+    });
     if(claimRef) claimRef.onDisconnect().cancel();
-    await root.child('orders/'+order._key).update({items, status:anyUnpack?'partial':'packed', packedAt:Date.now(), packedBy:MY_NAME, claim:null});
+    await root.child('orders/'+order._key).update({items, status:isBlocked?'unpacked':'packed', blockReason:blockReason||null, packedAt:Date.now(), packedBy:MY_NAME, claim:null});
   }catch(e){ toast('Save failed, try again','err'); if(conf){conf.disabled=false; conf.textContent='✓ Confirm pick';} return; }
   claimRef=null; stopHeartbeat();
-  flash('ok');beep('ok'); toast('Order '+order.trackingId+(activePick.some(p=>p.status!=='ok')?' packed (partial)':' packed'),'ok',2200);
+  flash(isBlocked?'err':'ok'); beep(isBlocked?'warn':'ok');
+  toast(isBlocked?('Order '+order.trackingId+' marked NOT packed'):('Order '+order.trackingId+' packed'), isBlocked?'warn':'ok', 2600);
   activeOrder=null; activePick=null; setMode('label'); renderOrderArea(); renderPackHeader();
-  if(platformStats(S.platforms[curPlatformKey]).complete) toast('🎉 Platform “'+curPlatformKey+'” complete','ok',4000);
+  if(!isBlocked && platformStats(S.platforms[curPlatformKey]).complete) toast('🎉 Platform “'+curPlatformKey+'” complete','ok',4000);
   focusScan();
 }
 function backToScan(){ activeOrder=null; activePick=null; setMode('label'); renderOrderArea(); focusScan(); }
@@ -776,38 +826,48 @@ function backToScan(){ activeOrder=null; activePick=null; setMode('label'); rend
    REPORT
    ============================================================ */
 function buildReport(){
-  let ordersDone=0,unitsPacked=0,unitsUnpacked=0,ordersPartial=0;
+  let ordersPacked=0,ordersNotPacked=0,unitsPacked=0,unitsNotPacked=0;
   const perPlatform={}, packedItems={}, byPacker={}; const unpackArr=[];
-  for(const k in S.platforms){ const p=S.platforms[k]; perPlatform[k]={ordersAll:p.orders.length,ordersDone:0,unitsPacked:0,unitsUnpacked:0}; packedItems[k]={};
-    for(const o of p.orders){ if(o.status==='pending')continue; ordersDone++; perPlatform[k].ordersDone++; if(o.status==='partial')ordersPartial++;
-      if(o.packedBy) byPacker[o.packedBy]=(byPacker[o.packedBy]||0)+1;
-      for(const it of (o.items||[])){
-        if(it.status==='ok'&&it.checked){ unitsPacked+=it.qty; perPlatform[k].unitsPacked+=it.qty; const kk=it.invKey; if(!packedItems[k][kk])packedItems[k][kk]={name:it.name,variation:it.variation,qty:0}; packedItems[k][kk].qty+=it.qty; }
-        else if(it.status&&it.status!=='ok'){ unitsUnpacked+=it.qty; perPlatform[k].unitsUnpacked+=it.qty; unpackArr.push({platform:k,trackingId:o.trackingId,name:it.name,variation:it.variation,qty:it.qty,reason:reasonLabel(it.status),note:it.reason||''}); }
+  for(const k in S.platforms){ const p=S.platforms[k]; perPlatform[k]={ordersAll:p.orders.length,ordersPacked:0,ordersNotPacked:0,unitsPacked:0}; packedItems[k]={};
+    for(const o of p.orders){
+      if(o.status==='packed'){ ordersPacked++; perPlatform[k].ordersPacked++; if(o.packedBy)byPacker[o.packedBy]=(byPacker[o.packedBy]||0)+1;
+        for(const it of (o.items||[])){ const q=it.qty||1; unitsPacked+=q; perPlatform[k].unitsPacked+=q; const kk=it.invKey; if(!packedItems[k][kk])packedItems[k][kk]={name:it.name,variation:it.variation,qty:0}; packedItems[k][kk].qty+=q; }
+      } else if(o.status==='unpacked'){ ordersNotPacked++; perPlatform[k].ordersNotPacked++;
+        for(const it of (o.items||[])){ const q=it.qty||1; unitsNotPacked+=q;
+          const cause = it.status && it.status!=='ok' && it.status!=='blocked';
+          const reason = (it.status==='blocked') ? (it.reason||'blocked by another item') : (it.status&&it.status!=='ok' ? reasonLabel(it.status)+(it.reason?': '+it.reason:'') : '—');
+          unpackArr.push({platform:k,trackingId:o.trackingId,name:it.name,variation:it.variation,qty:q,reason,cause,by:o.packedBy||''});
+        }
       }
     }
   }
-  return {ordersDone,ordersPartial,unitsPacked,unitsUnpacked,perPlatform,packedItems,unpackArr,byPacker};
+  return {ordersPacked,ordersNotPacked,unitsPacked,unitsNotPacked,perPlatform,packedItems,unpackArr,byPacker};
 }
 function stat(n,l,cls){ return '<div class="stat '+(cls||'')+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'; }
 function renderReport(){
   const r=buildReport();
   $('#reportTitle').innerHTML='Summary for <span class="mono">'+esc(S.date)+'</span>';
-  $('#reportStats').innerHTML=stat(r.ordersDone,'Orders packed','ok')+stat(r.unitsPacked,'Units packed','ok')+stat(r.unitsUnpacked,'Not packed',r.unitsUnpacked?'err':'')+stat(r.ordersPartial,'Partial',r.ordersPartial?'err':'');
+  $('#reportStats').innerHTML=stat(r.ordersPacked,'Orders packed','ok')+stat(r.ordersNotPacked,'Orders NOT packed',r.ordersNotPacked?'err':'')+stat(r.unitsPacked,'Units packed','ok')+stat(r.unitsNotPacked,'Units not packed',r.unitsNotPacked?'err':'');
   let b='';
-  b+='<div class="tabsec"><h2>By platform</h2><table><thead><tr><th>Platform</th><th class="num">Orders</th><th class="num">Units packed</th><th class="num">Not packed</th></tr></thead><tbody>';
-  for(const k in r.perPlatform){ const p=r.perPlatform[k]; b+='<tr><td>'+esc(k)+'</td><td class="num">'+p.ordersDone+' / '+p.ordersAll+'</td><td class="num">'+p.unitsPacked+'</td><td class="num">'+(p.unitsUnpacked||'—')+'</td></tr>'; }
+  b+='<div class="tabsec"><h2>By platform</h2><table><thead><tr><th>Platform</th><th class="num">Packed</th><th class="num">Units</th><th class="num">Not packed</th></tr></thead><tbody>';
+  for(const k in r.perPlatform){ const p=r.perPlatform[k]; b+='<tr><td>'+esc(k)+'</td><td class="num">'+p.ordersPacked+' / '+p.ordersAll+'</td><td class="num">'+p.unitsPacked+'</td><td class="num">'+(p.ordersNotPacked||'—')+'</td></tr>'; }
   b+='</tbody></table></div>';
   if(Object.keys(r.byPacker).length){ b+='<div class="tabsec"><h2>By packer</h2><table><thead><tr><th>Packer</th><th class="num">Orders packed</th></tr></thead><tbody>'; for(const who in r.byPacker) b+='<tr><td>'+esc(who)+'</td><td class="num">'+r.byPacker[who]+'</td></tr>'; b+='</tbody></table></div>'; }
   for(const k in r.packedItems){ const items=Object.values(r.packedItems[k]).sort((a,b)=>b.qty-a.qty); if(!items.length)continue; b+='<div class="tabsec"><h2>Packed — '+esc(k)+'</h2><table><thead><tr><th>Item</th><th>Variation</th><th class="num">Qty</th></tr></thead><tbody>'; for(const it of items) b+='<tr><td>'+esc(it.name)+'</td><td>'+esc(it.variation||'—')+'</td><td class="num">'+it.qty+'</td></tr>'; b+='</tbody></table></div>'; }
-  if(r.unpackArr.length){ b+='<div class="tabsec"><h2 style="color:var(--err)">Could not pack</h2><table><thead><tr><th>Platform</th><th>Label</th><th>Item</th><th class="num">Qty</th><th>Reason</th></tr></thead><tbody>'; for(const u of r.unpackArr) b+='<tr><td>'+esc(u.platform)+'</td><td class="mono">'+esc(u.trackingId)+'</td><td>'+esc(u.name)+(u.variation?' · '+esc(u.variation):'')+'</td><td class="num">'+u.qty+'</td><td>'+esc(u.reason)+(u.note?' ('+esc(u.note)+')':'')+'</td></tr>'; b+='</tbody></table></div>'; }
+  if(r.unpackArr.length){ b+='<div class="tabsec"><h2 style="color:var(--err)">Not packed (full orders)</h2><table><thead><tr><th>Platform</th><th>Label</th><th>Item</th><th class="num">Qty</th><th>Reason</th><th>Packer</th></tr></thead><tbody>'; for(const u of r.unpackArr) b+='<tr><td>'+esc(u.platform)+'</td><td class="mono">'+esc(u.trackingId)+'</td><td>'+(u.cause?'⛔ ':'↳ ')+esc(u.name)+(u.variation?' · '+esc(u.variation):'')+'</td><td class="num">'+u.qty+'</td><td>'+esc(u.reason)+'</td><td>'+esc(u.by||'—')+'</td></tr>'; b+='</tbody></table></div>'; }
   $('#reportBody').innerHTML=b;
 }
 function exportCSV(){
-  const rows=[['Platform','Label','Item','Variation','Qty','Status','Reason','Packer']];
+  const rows=[['Platform','Label','Item','Variation','Qty','Order status','Item status','Reason','Packer']];
   for(const k in S.platforms) for(const o of S.platforms[k].orders) for(const it of (o.items||[])){
-    const status=o.status==='pending'?'not packed':(it.status&&it.status!=='ok'?'NOT packed':(it.checked?'packed':'skipped'));
-    rows.push([k,o.trackingId,it.name,it.variation,it.qty,status,(it.status&&it.status!=='ok')?reasonLabel(it.status)+(it.reason?': '+it.reason:''):'',o.packedBy||'']);
+    const ostatus = o.status==='packed'?'packed':(o.status==='unpacked'?'NOT packed':'pending');
+    let istatus='pending', reason='';
+    if(o.status!=='pending'){
+      if(it.status && it.status!=='ok' && it.status!=='blocked'){ istatus='cannot pack'; reason=reasonLabel(it.status)+(it.reason?': '+it.reason:''); }
+      else if(it.status==='blocked'){ istatus='blocked'; reason=it.reason||''; }
+      else istatus = o.status==='packed'?'packed':'ok';
+    }
+    rows.push([k,o.trackingId,it.name,it.variation,it.qty,ostatus,istatus,reason,o.packedBy||'']);
   }
   const csv=rows.map(r=>r.map(c=>{c=String(c==null?'':c);return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(',')).join('\r\n');
   const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pack_report_'+S.date+'.csv'; a.click(); URL.revokeObjectURL(a.href);
@@ -822,13 +882,20 @@ function showSetupNote(){
     'Create a project at console.firebase.google.com → Realtime Database → set rules, then copy the Web App config.';
   $('#enterBtn').disabled=true; $('#gateSub').textContent='Connect Firebase first (see below).';
 }
+function applyRole(){
+  const a=IS_ADMIN;
+  ['finishBtn','loadDataBtn','pullOrdersBtn','updInvBtn','wipeBtn'].forEach(id=>{ const el=$('#'+id); if(el) el.classList.toggle('hide', !a); });
+  const aa=$('#adminActions'); if(aa) aa.classList.toggle('hide', !a);
+  $('#meName').textContent = MY_NAME + (a?' · admin':'');
+}
 function enter(){
   const v=$('#nameInput').value.trim();
   if(v.length<2){ $('#nameInput').focus(); toast('Enter your name','warn'); return; }
-  MY_NAME=v; try{localStorage.setItem('ps_name',v);}catch(e){}
+  MY_NAME=v; IS_ADMIN = norm(v)==='admin'; try{localStorage.setItem('ps_name',v);}catch(e){}
   SID=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random());
   $('#meName').textContent=MY_NAME;
   $('#namegate').classList.add('hide'); $('#appHeader').classList.remove('hide'); $('#appMain').classList.remove('hide');
+  applyRole();
   connect();
 }
 $('#enterBtn').onclick=enter;
@@ -858,6 +925,7 @@ $('#scanGo').onclick=()=>handleScan($('#scan').value);
 $('#backBtn').onclick=()=>goPlatforms();
 $('#homeBtn').onclick=()=>goPlatforms();
 $('#finishBtn').onclick=()=>{ show('report'); renderReport(); };
+$('#loadDataBtn').onclick=()=>show('seed');
 $('#reportBack').onclick=()=>goPlatforms();
 $('#csvBtn').onclick=exportCSV;
 $('#printBtn').onclick=()=>window.print();
