@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Pack Station Live — Calipokehouse</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-database-compat.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+
+:root{
+  --bg:#0E1116; --panel:#161A21; --panel2:#1C2129; --raised:#222936;
+  --border:#262D38; --line:#2C3543;
+  --ink:#E6EAF0; --muted:#8A94A3; --faint:#5A6472;
+  --accent:#21C063; --accent-d:#18742F;
+  --ok:#21C063; --warn:#F2B14C; --err:#F0524D; --info:#4C9AF2;
+  --r:14px; --r-sm:9px;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  --disp:'Space Grotesk',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--body);
+  font-size:15px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+button{font-family:inherit; cursor:pointer}
+input{font-family:inherit}
+.hide{display:none !important}
+.mono{font-family:var(--mono)}
+
+/* ---------- top bar ---------- */
+header{
+  position:sticky; top:0; z-index:40;
+  display:flex; align-items:center; gap:14px;
+  padding:10px 16px; background:rgba(14,17,22,.92);
+  border-bottom:1px solid var(--border); backdrop-filter:blur(8px);
+}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--disp); font-weight:700; letter-spacing:-.01em}
+.dot{width:11px; height:11px; border-radius:3px; background:var(--accent); box-shadow:0 0 12px var(--accent)}
+.brand small{display:block; font-family:var(--body); font-weight:500; font-size:11px; color:var(--muted); letter-spacing:.04em; text-transform:uppercase}
+.spacer{flex:1}
+.pill{
+  display:inline-flex; align-items:center; gap:7px; padding:6px 11px;
+  background:var(--panel); border:1px solid var(--border); border-radius:99px;
+  font-size:12.5px; color:var(--muted);
+}
+.pill b{color:var(--ink); font-family:var(--mono); font-weight:700}
+.iconbtn{
+  background:var(--panel); border:1px solid var(--border); color:var(--muted);
+  width:38px; height:38px; border-radius:10px; font-size:16px;
+  display:grid; place-items:center; transition:.15s;
+}
+.iconbtn:hover{color:var(--ink); border-color:var(--line)}
+.iconbtn.on{color:var(--accent); border-color:var(--accent)}
+
+main{max-width:1180px; margin:0 auto; padding:22px 16px 120px}
+
+/* ---------- generic ---------- */
+.card{background:var(--panel); border:1px solid var(--border); border-radius:var(--r); padding:20px}
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:12px 18px; border-radius:11px; border:1px solid var(--line);
+  background:var(--panel2); color:var(--ink); font-weight:600; font-size:14.5px; transition:.15s;
+}
+.btn:hover{border-color:var(--faint)}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#06210F}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--err); border-color:#3a2730}
+.btn.danger:hover{background:#1f1417}
+.btn:disabled{opacity:.4; cursor:not-allowed}
+.btn.lg{padding:15px 22px; font-size:16px}
+.eyebrow{font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); font-weight:600; margin-bottom:10px}
+h1{font-family:var(--disp); font-weight:700; font-size:26px; letter-spacing:-.02em; margin:0 0 6px}
+h2{font-family:var(--disp); font-weight:600; font-size:19px; margin:0 0 4px; letter-spacing:-.01em}
+.sub{color:var(--muted); margin:0}
+
+/* ---------- upload ---------- */
+.drop{
+  border:1.5px dashed var(--line); border-radius:var(--r); padding:46px 24px; text-align:center;
+  transition:.15s; background:var(--panel);
+}
+.drop.hot{border-color:var(--accent); background:#11201a}
+.drop h2{margin-bottom:6px}
+.kvs{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:18px}
+.tinput{flex:1; min-width:240px; background:var(--bg); border:1.5px solid var(--line); border-radius:11px; color:var(--ink); font-family:var(--mono); font-size:14px; padding:12px 14px; outline:none; transition:.15s}
+.tinput:focus{border-color:var(--accent)}
+.kv{background:var(--panel2); border:1px solid var(--border); border-radius:var(--r-sm); padding:12px 14px}
+.kv .n{font-family:var(--mono); font-weight:700; font-size:22px}
+.kv .l{font-size:12px; color:var(--muted); margin-top:2px}
+
+/* ---------- platform grid ---------- */
+.pgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px}
+.platform{
+  text-align:left; background:var(--panel); border:1px solid var(--border); border-radius:var(--r);
+  padding:18px; transition:.15s; position:relative; overflow:hidden;
+}
+.platform:hover{border-color:var(--line); transform:translateY(-2px)}
+.platform .pname{font-family:var(--disp); font-weight:600; font-size:18px; margin-bottom:14px}
+.platform.done{border-color:var(--accent)}
+.platform.done::after{content:"ГОТОВО"; position:absolute; top:11px; right:11px; font-size:10px; font-weight:700; letter-spacing:.1em; color:var(--accent)}
+.bar{height:7px; border-radius:99px; background:var(--raised); overflow:hidden; margin:4px 0 8px}
+.bar > i{display:block; height:100%; background:var(--accent); transition:width .3s}
+.platform .meta{display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted)}
+.platform .meta b{color:var(--ink); font-family:var(--mono)}
+
+/* ---------- scan strip ---------- */
+.scanwrap{
+  position:sticky; top:60px; z-index:30; margin:-2px 0 18px;
+  border-radius:var(--r); border:1px solid var(--border); background:var(--panel);
+  overflow:hidden;
+}
+.scanwrap.flash-ok{animation:flok .5s}
+.scanwrap.flash-err{animation:flerr .5s}
+@keyframes flok{0%,100%{box-shadow:none}30%{box-shadow:inset 0 0 0 2px var(--ok),0 0 24px -4px var(--ok)}}
+@keyframes flerr{0%,100%{box-shadow:none}30%{box-shadow:inset 0 0 0 2px var(--err),0 0 24px -4px var(--err)}}
+.scanhead{display:flex; align-items:center; gap:10px; padding:9px 16px; border-bottom:1px solid var(--border); background:var(--panel2)}
+.mode{font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; font-weight:700; padding:4px 9px; border-radius:7px}
+.mode.label{color:var(--info); background:#15233a}
+.mode.items{color:var(--warn); background:#2a2113}
+.scanhead .who{font-size:12.5px; color:var(--muted); margin-left:auto}
+.scanhead .who b{color:var(--ink)}
+.scanrow{display:flex; align-items:center; gap:12px; padding:14px 16px}
+.scanrow input{
+  flex:1; background:var(--bg); border:1.5px solid var(--line); border-radius:11px;
+  color:var(--ink); font-family:var(--mono); font-weight:700; font-size:20px; letter-spacing:.02em;
+  padding:14px 16px; outline:none; transition:.15s;
+}
+.scanrow input:focus{border-color:var(--accent)}
+.scanrow input::placeholder{color:var(--faint); font-weight:500; letter-spacing:0}
+
+/* ---------- toast ---------- */
+#toasts{position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:90; display:flex; flex-direction:column; gap:9px; width:min(520px,92vw)}
+.toast{
+  display:flex; align-items:center; gap:11px; padding:13px 16px; border-radius:12px;
+  background:var(--panel2); border:1px solid var(--border); box-shadow:0 16px 40px -16px #000;
+  animation:tin .2s; font-size:14.5px;
+}
+.toast .ic{width:26px; height:26px; border-radius:7px; display:grid; place-items:center; font-weight:700; flex:none}
+.toast.ok .ic{background:#13301f; color:var(--ok)} .toast.ok{border-color:#1d4530}
+.toast.err .ic{background:#311518; color:var(--err)} .toast.err{border-color:#4a2128}
+.toast.warn .ic{background:#2b2412; color:var(--warn)} .toast.warn{border-color:#473a1c}
+.toast.info .ic{background:#152338; color:var(--info)} .toast.info{border-color:#23395c}
+@keyframes tin{from{transform:translateY(10px);opacity:0}}
+
+/* ---------- order card ---------- */
+.orderhead{display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap; margin-bottom:6px}
+.trk{font-family:var(--mono); font-weight:700; font-size:20px}
+.statustag{font-size:11px; font-weight:700; letter-spacing:.08em; padding:4px 9px; border-radius:7px; text-transform:uppercase}
+.st-pending{background:#15233a; color:var(--info)}
+.st-packed{background:#13301f; color:var(--ok)}
+.st-partial{background:#2b2412; color:var(--warn)}
+
+.items{display:flex; flex-direction:column; gap:11px; margin-top:16px}
+.item{
+  display:grid; grid-template-columns:auto 64px 1fr auto; gap:14px; align-items:center;
+  background:var(--panel2); border:1px solid var(--border); border-radius:var(--r-sm); padding:12px 14px;
+  transition:.15s;
+}
+.item.checked{border-color:var(--accent); background:#11211a}
+.item.unpack{border-color:#3a2730; background:#1c1518; opacity:.85}
+.chk{
+  width:30px; height:30px; border-radius:8px; border:2px solid var(--line); background:transparent;
+  display:grid; place-items:center; font-size:17px; color:transparent; transition:.12s; flex:none;
+}
+.item.checked .chk{background:var(--accent); border-color:var(--accent); color:#06210F}
+.thumb{width:64px; height:64px; border-radius:9px; object-fit:cover; background:var(--raised); border:1px solid var(--border)}
+.iname{font-weight:600; font-size:15px; line-height:1.25}
+.ivar{font-size:12.5px; color:var(--muted); margin-top:1px}
+.ichips{display:flex; gap:7px; margin-top:7px; flex-wrap:wrap}
+.chip{font-size:11.5px; padding:3px 8px; border-radius:7px; background:var(--raised); color:var(--muted); border:1px solid var(--border)}
+.chip.loc{color:var(--info)} .chip.qty b{color:var(--ink); font-family:var(--mono)}
+.chip.stock b{font-family:var(--mono)} .chip.stock.low{color:var(--warn); border-color:#473a1c}
+.chip.stock.zero{color:var(--err); border-color:#4a2128}
+.iact{display:flex; flex-direction:column; gap:6px; align-items:flex-end}
+.linkbtn{background:none; border:none; color:var(--muted); font-size:12px; padding:4px 6px; border-radius:6px}
+.linkbtn:hover{color:var(--err)}
+.item.unpack .iname{text-decoration:line-through; text-decoration-color:var(--faint)}
+.reasontag{font-size:11px; color:var(--err); font-weight:600}
+
+.orderfoot{display:flex; gap:12px; margin-top:18px; flex-wrap:wrap}
+.orderfoot .spacer{flex:1}
+
+/* reason menu */
+.menu{position:relative}
+.menupop{
+  position:absolute; right:0; top:calc(100% + 6px); z-index:20; width:210px;
+  background:var(--raised); border:1px solid var(--line); border-radius:11px; padding:6px;
+  box-shadow:0 18px 40px -14px #000;
+}
+.menupop button{display:block; width:100%; text-align:left; background:none; border:none; color:var(--ink); padding:9px 11px; border-radius:8px; font-size:13.5px}
+.menupop button:hover{background:var(--panel2)}
+
+/* ---------- report ---------- */
+.statgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin:6px 0 20px}
+.stat{background:var(--panel2); border:1px solid var(--border); border-radius:var(--r-sm); padding:16px}
+.stat .n{font-family:var(--mono); font-weight:700; font-size:30px; letter-spacing:-.02em}
+.stat .l{font-size:12.5px; color:var(--muted); margin-top:3px}
+.stat.ok .n{color:var(--ok)} .stat.err .n{color:var(--err)}
+table{width:100%; border-collapse:collapse; font-size:14px}
+th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--border)}
+th{font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600}
+td.num,th.num{text-align:right; font-family:var(--mono)}
+.tabsec{margin-top:22px}
+.tabsec h2{margin-bottom:10px}
+
+/* empty / progress mini */
+.empty{text-align:center; color:var(--muted); padding:38px 20px; border:1px dashed var(--line); border-radius:var(--r)}
+.progress-mini{display:flex; align-items:center; gap:10px; font-size:13px; color:var(--muted); margin-top:14px}
+.progress-mini .bar{flex:1; margin:0}
+
+@media (max-width:560px){
+  .item{grid-template-columns:auto 52px 1fr; }
+  .item .iact{grid-column:1/-1; flex-direction:row; justify-content:flex-end}
+  .thumb{width:52px;height:52px}
+  h1{font-size:22px}
+  .scanrow input{font-size:17px}
+}
+
+
+/* ---------- live extras ---------- */
+.namegate{position:fixed; inset:0; z-index:120; background:var(--bg); display:grid; place-items:center; padding:20px}
+.namegate .box{width:min(420px,94vw); text-align:center}
+.namegate .tinput{width:100%; text-align:center; font-size:18px; margin:14px 0 12px}
+.online{display:inline-flex; align-items:center; gap:7px}
+.online .led{width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.lockbadge{position:absolute; top:11px; right:11px; font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--warn)}
+.platform.locked{border-color:#473a1c}
+.takenbox{border:1px solid #473a1c; background:#2a2113; border-radius:var(--r); padding:22px; text-align:center}
+.takenbox .who{font-family:var(--mono); font-weight:700; color:var(--warn); font-size:20px}
+.setupnote{background:var(--panel2); border:1px solid var(--border); border-radius:var(--r-sm); padding:14px 16px; font-size:13px; color:var(--muted); margin-top:14px; text-align:left}
+.setupnote code{font-family:var(--mono); color:var(--ink); background:var(--bg); padding:1px 5px; border-radius:5px}
+</style>
+</head>
+<body>
+
+<!-- ============ NAME GATE ============ -->
+<div class="namegate" id="namegate">
+  <div class="box">
+    <div class="brand" style="justify-content:center; margin-bottom:6px"><span class="dot"></span><div>Pack Station Live<small>Calipokehouse · совместная сборка</small></div></div>
+    <h1 id="gateTitle">Введите имя для входа в смену</h1>
+    <p class="sub" id="gateSub">Имя видно коллегам и попадает в отчёт по упаковщику.</p>
+    <input id="nameInput" class="tinput" autocomplete="off" placeholder="Например, Joe" maxlength="24">
+    <button class="btn primary lg" id="enterBtn" style="width:100%">Войти в смену</button>
+    <div class="setupnote" id="setupNote" style="display:none"></div>
+  </div>
+</div>
+
+<header class="hide" id="appHeader">
+  <div class="brand"><span class="dot"></span><div>Pack Station Live<small id="meName">—</small></div></div>
+  <div class="spacer"></div>
+  <button class="pill online" id="onlinePill" title="Кто в смене">🟢 <b id="onlineCount">0</b> в смене</button>
+  <div class="pill">📅 <b id="shiftDate">—</b></div>
+  <div class="pill">✅ <b id="totalDone">0</b>/<b id="totalAll">0</b></div>
+  <button class="iconbtn on" id="soundBtn" title="Звук">🔊</button>
+  <button class="iconbtn" id="homeBtn" title="К платформам">▤</button>
+</header>
+
+<main class="hide" id="appMain">
+  <!-- ============ SEED / LOAD ============ -->
+  <section id="screen-seed" class="hide">
+    <div class="eyebrow">Старт смены — база ещё не загружена</div>
+    <h1>Загрузите базу дня в общую сессию</h1>
+    <p class="sub" style="margin-bottom:18px">Загружает один человек (старший смены). Остальные подключатся к этой же живой сессии автоматически.</p>
+
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex; align-items:center; gap:9px; margin-bottom:11px">
+        <span class="mode label">Google Таблица</span>
+        <span class="sub" style="font-size:13px">тянуть по ссылке</span>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap">
+        <input id="gurl" class="tinput" autocomplete="off" spellcheck="false" placeholder="https://docs.google.com/spreadsheets/d/…">
+        <button class="btn primary" id="gload">Загрузить в смену</button>
+      </div>
+      <p class="sub" id="gstatus" style="font-size:12.5px; margin-top:9px">Доступ: Поделиться → «Все, у кого есть ссылка» → Читатель. Трекинг — формат «Простой текст».</p>
+      <button class="btn hide" id="gproxy" style="margin-top:10px">↪ Попробовать через прокси</button>
+    </div>
+
+    <div class="drop" id="drop">
+      <p class="sub" style="margin:0 0 8px">или файл .xlsx</p>
+      <label class="btn lg" style="margin-top:4px">Выбрать файл .xlsx
+        <input type="file" id="file" accept=".xlsx,.xls,.csv" class="hide">
+      </label>
+    </div>
+  </section>
+
+  <!-- ============ PLATFORMS ============ -->
+  <section id="screen-platforms" class="hide">
+    <div class="eyebrow">Выбор платформы</div>
+    <h1 style="margin-bottom:16px">Выберите платформу для сбора</h1>
+    <div class="pgrid" id="pgrid"></div>
+    <div style="margin-top:24px; display:flex; gap:12px; flex-wrap:wrap">
+      <button class="btn primary" id="finishBtn">📋 Отчёт смены</button>
+      <button class="btn hide" id="refreshBtn">🔄 Подтянуть новые заказы</button>
+      <button class="btn danger ghost" id="wipeBtn">Очистить смену (менеджер)</button>
+    </div>
+  </section>
+
+  <!-- ============ PACK ============ -->
+  <section id="screen-pack" class="hide">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap">
+      <button class="btn ghost" id="backBtn">← Платформы</button>
+      <h1 id="packTitle" style="margin:0">Платформа</h1>
+      <div class="spacer"></div>
+      <div class="pill">Заказы: <b id="pDone">0</b>/<b id="pAll">0</b></div>
+    </div>
+    <div class="scanwrap" id="scanwrap">
+      <div class="scanhead">
+        <span class="mode label" id="modeTag">Сканируйте наклейку</span>
+        <span class="who">режим: <b id="modeHint">трекинг</b></span>
+      </div>
+      <div class="scanrow">
+        <input id="scan" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Сканируйте штрихкод наклейки…">
+        <button class="btn" id="scanGo">Ввод</button>
+      </div>
+    </div>
+    <div id="orderArea"></div>
+  </section>
+
+  <!-- ============ REPORT ============ -->
+  <section id="screen-report" class="hide">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px; flex-wrap:wrap">
+      <div class="eyebrow" style="margin:0">Отчёт смены</div>
+      <div class="spacer"></div>
+      <button class="btn" id="csvBtn">⬇ CSV</button>
+      <button class="btn" id="printBtn">🖨 Печать</button>
+      <button class="btn ghost" id="reportBack">← Назад</button>
+    </div>
+    <h1 id="reportTitle">Сводка</h1>
+    <div class="statgrid" id="reportStats"></div>
+    <div id="reportBody"></div>
+  </section>
+</main>
+
+<div id="toasts"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   Pack Station LIVE — multi-user via Firebase Realtime Database
+   - packers type their name
+   - hard lock on order claim (transaction) until confirm
+   - atomic shared stock, live progress, presence, auto-release
+   ============================================================ */
+
+/* >>> PASTE YOUR NEW FIREBASE PROJECT CONFIG HERE <<< */
+const firebaseConfig = {
+  apiKey: "AIzaSyB2I2sR9czF6F29OZMyEZubmwQGP7nWFlc",
+  authDomain: "calipoke-packstation.firebaseapp.com",
+  databaseURL: "https://calipoke-packstation-default-rtdb.firebaseio.com",
+  projectId: "calipoke-packstation",
+  storageBucket: "calipoke-packstation.firebasestorage.app",
+  messagingSenderId: "125288117157",
+  appId: "1:125288117157:web:461b4d553e100c07b9ae4c"
+};
+
+const STALE_MS = 90000;      // claim auto-takeover if holder silent this long
+const HEARTBEAT_MS = 20000;  // refresh claim/presence while active
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const norm = v => (v==null?'':String(v)).trim().toLowerCase().replace(/\s+/g,' ');
+const keyOf = (n,va)=>norm(n)+'||'+norm(va);
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const safeKey = k => encodeURIComponent(String(k)).replace(/\./g,'%2E'); // RTDB-safe key
+const PLACEHOLDER = 'data:image/svg+xml;utf8,'+encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#222936"/><text x="32" y="38" font-size="22" text-anchor="middle" fill="#5A6472">▧</text></svg>');
+
+const COL = {
+  tracking:['tracking id','tracking','tracking_id','trackingid','трек','трекинг','track','order id','order','номер заказа','order number'],
+  name:['item name','item','name','product','название','товар','наименование'],
+  variation:['variation','variant','вариация','вариант','вид'],
+  qty:['quantity','qty','count','кол-во','количество','кол'],
+  location:['location','loc','место','расположение','ряд/полка','полка','ряд','bin','shelf'],
+  stock:['stock','soh','остаток','остатки','quantity on hand','qoh','on hand','наличие'],
+  barcode:['barcode','sku','upc','штрихкод','штрих-код','код','ean'],
+  image:['image','img','photo','picture','изображение','фото','картинка','url']
+};
+function pickCol(h,kind){const hs=h.map(norm);for(const w of COL[kind]){const i=hs.indexOf(w);if(i>=0)return i;}for(let i=0;i<hs.length;i++)if(COL[kind].some(w=>hs[i].includes(w)))return i;return -1;}
+const INVENTORY_NAMES = ['inventory','stock','остатки','склад','база','catalog','каталог','остаток'];
+
+/* ---------- runtime state ---------- */
+let db=null, root=null;
+let MY_NAME='', SID='';
+const DATE = new Date().toISOString().slice(0,10);
+let S = { date:DATE, platforms:{}, inventory:{}, barcodeIdx:{} };  // local mirror of Firebase
+let curScreen='seed', curPlatformKey=null;
+let activeOrder=null;   // {key, platform, trackingId}
+let activePick=null;    // [{checked,status,reason}] local picking overlay (hard-locked to me)
+let claimRef=null, hbTimer=null;
+let soundOn=true;
+
+/* ============================================================
+   PARSING (shared with v1)
+   ============================================================ */
+function parseWorkbook(arrayBuf){
+  const wb = XLSX.read(arrayBuf, {type:'array'});
+  const out = { inventory:{}, platforms:{} };
+  let invName = wb.SheetNames.find(n=>INVENTORY_NAMES.includes(norm(n)));
+  if(invName){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[invName], {header:1, raw:false, defval:''});
+    if(rows.length>=2){
+      const h=rows[0];
+      const ci={name:pickCol(h,'name'),variation:pickCol(h,'variation'),location:pickCol(h,'location'),stock:pickCol(h,'stock'),barcode:pickCol(h,'barcode'),image:pickCol(h,'image')};
+      for(let r=1;r<rows.length;r++){
+        const row=rows[r]; const nm=String(row[ci.name]??'').trim(); if(!nm) continue;
+        const variation=ci.variation>=0?String(row[ci.variation]??'').trim():'';
+        out.inventory[keyOf(nm,variation)]={
+          ikey:keyOf(nm,variation), name:nm, variation,
+          location:ci.location>=0?String(row[ci.location]??'').trim():'',
+          stock:ci.stock>=0?(parseInt(row[ci.stock],10)||0):null,
+          barcode:ci.barcode>=0?String(row[ci.barcode]??'').trim():'',
+          image:ci.image>=0?String(row[ci.image]??'').trim():''
+        };
+      }
+    }
+  }
+  for(const sn of wb.SheetNames.filter(n=>n!==invName)){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:false, defval:''});
+    if(rows.length<2) continue;
+    const h=rows[0];
+    const ci={tracking:pickCol(h,'tracking'),name:pickCol(h,'name'),qty:pickCol(h,'qty'),variation:pickCol(h,'variation')};
+    if(ci.tracking<0||ci.name<0) continue;
+    const orders={};
+    for(let r=1;r<rows.length;r++){
+      const row=rows[r]; const tid=String(row[ci.tracking]??'').trim(); const nm=String(row[ci.name]??'').trim();
+      if(!tid||!nm) continue;
+      const variation=ci.variation>=0?String(row[ci.variation]??'').trim():'';
+      const qty=ci.qty>=0?(parseInt(row[ci.qty],10)||1):1;
+      if(!orders[tid]) orders[tid]={trackingId:tid, items:[]};
+      orders[tid].items.push({name:nm, variation, qty, invKey:keyOf(nm,variation)});
+    }
+    const list=Object.values(orders);
+    if(list.length) out.platforms[sn]={name:sn, orders:list};
+  }
+  if(Object.keys(out.platforms).length===0) throw new Error('Не нашёл вкладок с заказами (нужны tracking id и item name).');
+  return out;
+}
+
+/* ============================================================
+   FIREBASE: connect, seed, listen
+   ============================================================ */
+function configReady(){ return firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('PASTE'); }
+
+function connect(){
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+  root = db.ref('packstation/'+DATE);
+
+  // presence
+  const pRef = root.child('presence/'+SID);
+  pRef.set({name:MY_NAME, at:Date.now()});
+  pRef.onDisconnect().remove();
+  setInterval(()=>pRef.child('at').set(Date.now()), HEARTBEAT_MS);
+  root.child('presence').on('value', snap=>{
+    let n=0; const now=Date.now(); snap.forEach(c=>{ const v=c.val(); if(v && now-(v.at||0)<60000) n++; });
+    $('#onlineCount').textContent=n;
+  });
+
+  // live data
+  root.child('inventory').on('value', snap=>{
+    S.inventory={}; S.barcodeIdx={};
+    snap.forEach(c=>{ const v=c.val(); if(!v||!v.ikey) return; S.inventory[v.ikey]=v; if(v.barcode) S.barcodeIdx[norm(v.barcode)]=v.ikey; });
+    renderCurrent();
+  });
+  root.child('orders').on('value', snap=>{
+    const platforms={};
+    snap.forEach(c=>{ const v=c.val(); if(!v) return; const pk=v.platform;
+      (platforms[pk]=platforms[pk]||{name:pk, orders:[]});
+      platforms[pk].orders.push({_key:c.key, trackingId:v.trackingId, items:v.items||[], status:v.status||'pending', claim:v.claim||null, packedBy:v.packedBy||''});
+    });
+    S.platforms=platforms;
+    renderCurrent();
+  });
+
+  // decide: join existing session or show loader
+  root.child('meta').once('value').then(snap=>{
+    if(snap.exists()){ goPlatforms(); }
+    else { show('seed'); }
+  });
+}
+
+async function seedFromBytes(buf, sourceMeta){
+  let parsed;
+  try{ parsed=parseWorkbook(buf); }catch(e){ gstatus(e.message,'err'); return false; }
+  // claim seeding so two people don't double-write
+  const res = await root.child('meta').transaction(cur => cur ? undefined : {seededBy:MY_NAME, seededAt:Date.now(), source:sourceMeta||null});
+  if(res.committed && res.snapshot.val() && res.snapshot.val().seededBy===MY_NAME){
+    const updates={};
+    for(const k in parsed.inventory) updates['inventory/'+safeKey(k)] = parsed.inventory[k];
+    for(const pk in parsed.platforms){
+      for(const o of parsed.platforms[pk].orders){
+        const okey = safeKey(pk+'__'+o.trackingId);
+        updates['orders/'+okey] = { platform:pk, trackingId:o.trackingId, items:o.items, status:'pending', claim:null };
+      }
+    }
+    await root.update(updates);
+    toast('База загружена в смену','ok',2600);
+  }else{
+    toast('Смена уже запущена — подключаюсь','info',2600);
+  }
+  goPlatforms();
+  return true;
+}
+
+/* add only-new orders/inventory from a fresh pull (no overwrite of progress/stock) */
+async function addNewFromBytes(buf){
+  let parsed; try{ parsed=parseWorkbook(buf); }catch(e){ toast(e.message,'err'); return; }
+  const existingOrders={}; for(const pk in S.platforms) S.platforms[pk].orders.forEach(o=>existingOrders[o._key]=1);
+  const updates={}; let added=0;
+  for(const pk in parsed.platforms) for(const o of parsed.platforms[pk].orders){
+    const okey=safeKey(pk+'__'+o.trackingId);
+    if(!existingOrders[okey]){ updates['orders/'+okey]={platform:pk,trackingId:o.trackingId,items:o.items,status:'pending',claim:null}; added++; }
+  }
+  for(const k in parsed.inventory){ if(!S.inventory[k]) updates['inventory/'+safeKey(k)]=parsed.inventory[k]; }
+  if(Object.keys(updates).length) await root.update(updates);
+  toast(added?('Добавлено новых заказов: '+added):'Новых заказов нет','ok',2800);
+}
+
+/* ============================================================
+   GOOGLE SHEET FETCH (file:// guard + proxy fallback)
+   ============================================================ */
+function gsheetToExportUrl(input){
+  const raw=(input||'').trim(); if(!raw) return null;
+  let m=raw.match(/\/spreadsheets\/d\/e\/([A-Za-z0-9-_]+)/); if(m) return 'https://docs.google.com/spreadsheets/d/e/'+m[1]+'/pub?output=xlsx';
+  m=raw.match(/\/spreadsheets\/d\/([A-Za-z0-9-_]+)/); if(m) return 'https://docs.google.com/spreadsheets/d/'+m[1]+'/export?format=xlsx';
+  if(/^[A-Za-z0-9-_]{20,}$/.test(raw)) return 'https://docs.google.com/spreadsheets/d/'+raw+'/export?format=xlsx';
+  return null;
+}
+let _proxyCtx=null;
+async function fetchSheet(input, viaProxy){
+  const exportUrl=gsheetToExportUrl(input);
+  if(!exportUrl){ gstatus('Не похоже на ссылку Google Таблицы.','err'); return null; }
+  if(location.protocol==='file:' && !viaProxy){
+    gstatus('Открыто как файл (file://) — браузер не пускает в сеть. Разместите на GitHub Pages/localhost, либо «через прокси».','err');
+    _proxyCtx=input; $('#gproxy').classList.remove('hide'); return null;
+  }
+  gstatus(viaProxy?'Загружаю через прокси…':'Загружаю из Google…','info');
+  const target = viaProxy ? ('https://api.allorigins.win/raw?url='+encodeURIComponent(exportUrl)) : exportUrl;
+  try{
+    const res=await fetch(target,{redirect:'follow',cache:'no-store',mode:'cors',credentials:'omit'});
+    if(!res.ok) throw new Error('http '+res.status);
+    const ct=(res.headers.get('content-type')||'').toLowerCase();
+    if(ct.includes('text/html')) throw new Error('private');
+    const buf=new Uint8Array(await res.arrayBuffer());
+    if(!(buf[0]===0x50 && buf[1]===0x4B)) throw new Error('private');
+    $('#gproxy').classList.add('hide'); return buf;
+  }catch(err){
+    if(err.message==='private') gstatus('Нет доступа к таблице. Откройте доступ «по ссылке → Читатель».','err');
+    else { gstatus('Браузер заблокировал запрос (CORS/сеть). Можно попробовать «через прокси».','err'); if(!viaProxy){_proxyCtx=input; $('#gproxy').classList.remove('hide');} }
+    return null;
+  }
+}
+function gstatus(msg,kind){ const el=$('#gstatus'); if(!el)return; el.style.color={ok:'var(--ok)',err:'var(--err)',info:'var(--muted)'}[kind]||'var(--muted)'; el.textContent=msg; }
+
+/* ============================================================
+   SOUND / TOAST / FLASH
+   ============================================================ */
+let actx=null;
+function beep(kind){ if(!soundOn)return; try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); const o=actx.createOscillator(),g=actx.createGain(); o.connect(g);g.connect(actx.destination); const f={ok:[880,1320],err:[200,150],warn:[440,440]}[kind]||[600]; o.frequency.value=f[0]; if(f[1])o.frequency.setValueAtTime(f[1],actx.currentTime+0.08); g.gain.setValueAtTime(0.0001,actx.currentTime); g.gain.exponentialRampToValueAtTime(0.18,actx.currentTime+0.01); g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+0.18); o.start();o.stop(actx.currentTime+0.2);}catch(e){} }
+function toast(msg,kind='info',ms=2600){ const ic={ok:'✓',err:'✕',warn:'!',info:'i'}; const el=document.createElement('div'); el.className='toast '+kind; el.innerHTML='<span class="ic">'+ic[kind]+'</span><span>'+esc(msg)+'</span>'; $('#toasts').appendChild(el); setTimeout(()=>{el.style.transition='.25s';el.style.opacity='0';el.style.transform='translateY(8px)';setTimeout(()=>el.remove(),250)},ms); }
+function flash(kind){ const w=$('#scanwrap'); if(!w)return; w.classList.remove('flash-ok','flash-err'); void w.offsetWidth; w.classList.add(kind==='err'?'flash-err':'flash-ok'); }
+
+/* ============================================================
+   NAVIGATION + RENDER ROUTER
+   ============================================================ */
+function show(screen){
+  curScreen=screen;
+  ['seed','platforms','pack','report'].forEach(s=>{ const el=$('#screen-'+s); if(el) el.classList.toggle('hide', s!==screen); });
+  if(screen!=='pack') releaseIfHolding();
+  window.scrollTo({top:0});
+}
+function goPlatforms(){ show('platforms'); renderPlatforms(); }
+function renderCurrent(){
+  $('#shiftDate').textContent=S.date;
+  const g=globalStats(); $('#totalDone').textContent=g.done; $('#totalAll').textContent=g.all;
+  if(curScreen==='platforms') renderPlatforms();
+  else if(curScreen==='pack'){ renderPackHeader(); renderOrderArea(); }
+  else if(curScreen==='report') renderReport();
+}
+
+/* ============================================================
+   PLATFORMS
+   ============================================================ */
+function platformStats(p){ const all=p.orders.length; const done=p.orders.filter(o=>o.status!=='pending').length;
+  const now=Date.now(); const locked=p.orders.filter(o=>o.claim && now-(o.claim.at||0)<STALE_MS && o.status==='pending').length;
+  return {all,done,locked,complete:all>0&&done===all}; }
+function globalStats(){ let all=0,done=0; for(const k in S.platforms){const s=platformStats(S.platforms[k]); all+=s.all; done+=s.done;} return {all,done}; }
+function renderPlatforms(){
+  const rb=$('#refreshBtn'); if(rb) rb.classList.toggle('hide', !sourceInput());
+  const g=$('#pgrid'); g.innerHTML='';
+  for(const key in S.platforms){
+    const p=S.platforms[key]; const st=platformStats(p); const pct=st.all?Math.round(st.done/st.all*100):0;
+    const el=document.createElement('button');
+    el.className='platform'+(st.complete?' done':'')+(st.locked&&!st.complete?' locked':'');
+    el.innerHTML=(st.locked&&!st.complete?'<div class="lockbadge">🔒 '+st.locked+' в работе</div>':'')+
+      '<div class="pname">'+esc(p.name)+'</div>'+
+      '<div class="bar"><i style="width:'+pct+'%"></i></div>'+
+      '<div class="meta"><span>Собрано <b>'+st.done+'</b> из <b>'+st.all+'</b></span><span>'+pct+'%</span></div>';
+    el.onclick=()=>openPlatform(key);
+    g.appendChild(el);
+  }
+}
+let _sourceInput=null;
+function sourceInput(){ return _sourceInput; }
+
+/* ============================================================
+   PACK + CLAIM (hard lock)
+   ============================================================ */
+function openPlatform(key){ curPlatformKey=key; activeOrder=null; activePick=null; show('pack'); $('#packTitle').textContent=S.platforms[key].name; setMode('label'); renderPackHeader(); renderOrderArea(); focusScan(); }
+function renderPackHeader(){ const p=S.platforms[curPlatformKey]; if(!p)return; const st=platformStats(p); $('#pDone').textContent=st.done; $('#pAll').textContent=st.all; }
+function setMode(m){ const tag=$('#modeTag'),hint=$('#modeHint'),inp=$('#scan'); if(m==='label'){tag.textContent='Сканируйте наклейку';tag.className='mode label';hint.textContent='трекинг';inp.placeholder='Сканируйте штрихкод наклейки…';}else{tag.textContent='Сканируйте товары';tag.className='mode items';hint.textContent='товар';inp.placeholder='Сканируйте штрихкод товара (или отметьте вручную)…';} }
+function focusScan(){ const i=$('#scan'); if(i){i.value='';i.focus();} }
+
+function findInPlatform(pk,tid){ const p=S.platforms[pk]; if(!p)return null; const t=norm(tid); return p.orders.find(o=>norm(o.trackingId)===t)||null; }
+function findAnyPlatform(tid){ const t=norm(tid); for(const k in S.platforms){ const o=S.platforms[k].orders.find(o=>norm(o.trackingId)===t); if(o)return {platform:k,order:o}; } return null; }
+function findByKey(key){ for(const k in S.platforms){ const o=S.platforms[k].orders.find(o=>o._key===key); if(o)return o; } return null; }
+
+function handleScan(raw){ const v=raw.trim(); if(!v)return; if(activeOrder) scanItem(v); else scanLabel(v); focusScan(); }
+
+async function scanLabel(val){
+  const order=findInPlatform(curPlatformKey,val);
+  if(!order){
+    const el=findAnyPlatform(val);
+    if(el){ flash('err');beep('warn'); toast('Этот трек с платформы «'+el.platform+'»','warn',3500); }
+    else { flash('err');beep('err'); toast('Наклейка не найдена: '+val,'err',3200); }
+    return;
+  }
+  if(order.status!=='pending'){ flash('err');beep('warn'); toast('Заказ '+order.trackingId+' уже собран ('+(order.packedBy||'')+')','warn',3200); activeOrder={key:order._key,platform:curPlatformKey,trackingId:order.trackingId}; activePick=null; setMode('items'); renderOrderArea(); return; }
+
+  // hard-lock claim via transaction
+  const cRef=root.child('orders/'+order._key+'/claim');
+  let res;
+  try{ res=await cRef.transaction(cur=>{ if(!cur || cur.sid===SID || (Date.now()-(cur.at||0))>STALE_MS) return {by:MY_NAME, at:Date.now(), sid:SID}; return; }); }
+  catch(e){ toast('Сеть недоступна, повторите','err'); return; }
+
+  const got = res.committed && res.snapshot.val() && res.snapshot.val().sid===SID;
+  if(!got){ const h=res.snapshot.val(); flash('err');beep('warn'); toast('Заказ занят: '+((h&&h.by)||'другой упаковщик'),'warn',3500); renderOrderArea(); return; }
+
+  // I own it
+  claimRef=cRef; cRef.onDisconnect().set(null); startHeartbeat();
+  activeOrder={key:order._key, platform:curPlatformKey, trackingId:order.trackingId};
+  activePick=order.items.map(()=>({checked:false,status:'ok',reason:''}));
+  flash('ok');beep('ok'); setMode('items'); renderOrderArea();
+}
+
+function startHeartbeat(){ stopHeartbeat(); hbTimer=setInterval(()=>{ if(claimRef) claimRef.child('at').set(Date.now()); }, HEARTBEAT_MS); }
+function stopHeartbeat(){ if(hbTimer){clearInterval(hbTimer); hbTimer=null;} }
+function releaseIfHolding(){ if(claimRef){ try{claimRef.onDisconnect().cancel(); claimRef.set(null);}catch(e){} claimRef=null; } stopHeartbeat(); activeOrder=null; activePick=null; }
+
+function scanItem(val){
+  const order=findByKey(activeOrder.key); if(!order || !activePick){ setMode('label'); return; }
+  const bkey=S.barcodeIdx[norm(val)];
+  let idx=-1;
+  if(bkey) idx=order.items.findIndex((it,i)=>it.invKey===bkey && !activePick[i].checked && activePick[i].status==='ok');
+  if(idx<0){ const t=norm(val); idx=order.items.findIndex((it,i)=>!activePick[i].checked && activePick[i].status==='ok' && (norm(it.name)===t||norm(it.name).includes(t))); }
+  if(idx>=0){ activePick[idx].checked=true; flash('ok');beep('ok'); toast('✓ '+order.items[idx].name,'ok',1500); renderOrderArea(); return; }
+  if(bkey){ const inOrder=order.items.findIndex(it=>it.invKey===bkey);
+    if(inOrder>=0 && activePick[inOrder].checked){ toast('Уже отмечено','warn',2000);beep('warn'); }
+    else if(inOrder>=0){ toast('Позиция помечена «нельзя упаковать»','warn',2400);beep('warn'); }
+    else { flash('err');beep('err'); const iv=S.inventory[bkey]; toast('Товар «'+(iv?iv.name:val)+'» не из этого заказа','err',3000); }
+  } else { flash('err');beep('err'); toast('Неизвестный штрихкод: '+val,'err',2800); }
+}
+
+function reasonLabel(s){ return {out_of_stock:'Закончился',damaged:'Повреждён',other:'Иная причина'}[s]||s; }
+
+function renderOrderArea(){
+  const area=$('#orderArea'); if(!area)return;
+  if(!activeOrder){
+    const st=platformStats(S.platforms[curPlatformKey]||{orders:[]});
+    if(st.complete) area.innerHTML='<div class="empty"><h2 style="color:var(--accent)">✓ Платформа завершена</h2><p class="sub">Все '+st.all+' наклеек собраны.</p><div style="margin-top:14px"><button class="btn" onclick="goPlatforms()">← К платформам</button></div></div>';
+    else area.innerHTML='<div class="empty">Отсканируйте наклейку, чтобы взять заказ.<br><span style="font-size:13px">Осталось: <b class="mono">'+(st.all-st.done)+'</b> · в работе у коллег: <b class="mono">'+st.locked+'</b></span></div>';
+    return;
+  }
+  const order=findByKey(activeOrder.key);
+  if(!order){ area.innerHTML='<div class="empty">Заказ недоступен.</div>'; return; }
+  const readonly = order.status!=='pending' || !activePick;
+
+  if(readonly && order.status!=='pending'){
+    let h='<div class="card"><div class="orderhead"><div><div class="eyebrow" style="margin-bottom:4px">Наклейка</div><div class="trk">'+esc(order.trackingId)+'</div></div>'+
+      (order.status==='packed'?'<span class="statustag st-packed">собран</span>':'<span class="statustag st-partial">частично</span>')+'</div>'+
+      '<p class="sub" style="margin-top:10px">Собрал: <b>'+esc(order.packedBy||'—')+'</b></p>'+
+      '<div class="orderfoot"><button class="btn" onclick="backToScan()">← Сканировать следующую</button></div></div>';
+    area.innerHTML=h; return;
+  }
+
+  const stTag='<span class="statustag st-pending">в работе · '+esc(MY_NAME)+'</span>';
+  let html='<div class="card"><div class="orderhead"><div><div class="eyebrow" style="margin-bottom:4px">Наклейка</div><div class="trk">'+esc(order.trackingId)+'</div></div>'+stTag+'<div class="spacer"></div><div class="pill">Позиций: <b>'+order.items.length+'</b></div></div><div class="items">';
+  order.items.forEach((it,idx)=>{
+    const iv=S.inventory[it.invKey]||{}; const img=iv.image||PLACEHOLDER; const loc=iv.location||'—'; const stock=(iv.stock==null)?null:iv.stock;
+    const pk=activePick[idx];
+    let stockChip=''; if(stock!=null){ const cls=stock<=0?'zero':(stock<it.qty?'low':''); stockChip='<span class="chip stock '+cls+'">остаток <b>'+stock+'</b></span>'; }
+    const cls=pk.status!=='ok'?'unpack':(pk.checked?'checked':'');
+    html+='<div class="item '+cls+'">'+
+      '<button class="chk" data-toggle="'+idx+'" '+(pk.status!=='ok'?'disabled':'')+'>✓</button>'+
+      '<img class="thumb" src="'+esc(img)+'" onerror="this.src=\''+PLACEHOLDER+'\'">'+
+      '<div><div class="iname">'+esc(it.name)+'</div>'+(it.variation?'<div class="ivar">'+esc(it.variation)+'</div>':'')+
+      '<div class="ichips"><span class="chip loc">📍 '+esc(loc)+'</span><span class="chip qty">кол-во <b>'+it.qty+'</b></span>'+stockChip+
+      (pk.status!=='ok'?'<span class="reasontag">⛔ '+reasonLabel(pk.status)+(pk.reason?': '+esc(pk.reason):'')+'</span>':'')+'</div></div>'+
+      '<div class="iact">'+
+      (pk.status==='ok'
+        ? '<div class="menu"><button class="linkbtn" data-menu="'+idx+'">нельзя упаковать ▾</button><div class="menupop hide" data-pop="'+idx+'"><button data-reason="out_of_stock,'+idx+'">📦 Товар закончился</button><button data-reason="damaged,'+idx+'">💥 Товар повреждён</button><button data-reason="other,'+idx+'">✎ Иная причина…</button></div></div>'
+        : '<button class="linkbtn" data-restore="'+idx+'">↩ вернуть</button>')+
+      '</div></div>';
+  });
+  html+='</div>';
+  const okItems=activePick.filter(p=>p.status==='ok').length;
+  const allResolved=activePick.every(p=>p.status!=='ok'||p.checked);
+  html+='<div class="orderfoot"><button class="btn ghost" data-checkall>Отметить все ('+okItems+')</button><button class="btn ghost" data-cancel>Отмена</button><div class="spacer"></div><button class="btn primary lg" data-confirm '+(allResolved?'':'disabled')+'>✓ Подтвердить сбор</button></div>';
+  if(!allResolved){ const left=activePick.filter(p=>p.status==='ok'&&!p.checked).length; html+='<div class="progress-mini"><span>Осталось отметить <b class="mono">'+left+'</b></span></div>'; }
+  html+='</div>';
+  area.innerHTML=html;
+  wireOrder(order);
+}
+
+function wireOrder(order){
+  $$('#orderArea [data-toggle]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.toggle; if(activePick[i].status!=='ok')return; activePick[i].checked=!activePick[i].checked; if(activePick[i].checked)beep('ok'); renderOrderArea(); });
+  $$('#orderArea [data-menu]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const idx=b.dataset.menu; $$('#orderArea .menupop').forEach(p=>{if(p.dataset.pop!==idx)p.classList.add('hide');}); $('#orderArea [data-pop="'+idx+'"]').classList.toggle('hide'); });
+  $$('#orderArea [data-reason]').forEach(b=>b.onclick=()=>{ const [reason,idx]=b.dataset.reason.split(','); let note=''; if(reason==='other'){note=prompt('Причина:','');if(note===null)return;} activePick[+idx].status=reason; activePick[+idx].reason=note||''; activePick[+idx].checked=false; beep('warn'); renderOrderArea(); });
+  $$('#orderArea [data-restore]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.restore; activePick[i].status='ok'; activePick[i].reason=''; renderOrderArea(); });
+  const ca=$('#orderArea [data-checkall]'); if(ca)ca.onclick=()=>{ activePick.forEach(p=>{if(p.status==='ok')p.checked=true;}); beep('ok'); renderOrderArea(); };
+  const cancel=$('#orderArea [data-cancel]'); if(cancel)cancel.onclick=()=>{ releaseIfHolding(); setMode('label'); renderOrderArea(); focusScan(); };
+  const conf=$('#orderArea [data-confirm]'); if(conf)conf.onclick=()=>confirmOrder(order);
+}
+
+async function confirmOrder(order){
+  if(!activePick.every(p=>p.status!=='ok'||p.checked)){ toast('Отметьте все товары или укажите причину','warn'); return; }
+  const conf=$('#orderArea [data-confirm]'); if(conf){conf.disabled=true; conf.textContent='Сохраняю…';}
+  // atomic shared stock decrement
+  try{
+    for(let i=0;i<order.items.length;i++){
+      const p=activePick[i]; if(p.status==='ok' && p.checked){
+        const iv=S.inventory[order.items[i].invKey];
+        if(iv && iv.stock!=null){ await root.child('inventory/'+safeKey(order.items[i].invKey)+'/stock').transaction(s=> (s==null?null:s-order.items[i].qty)); }
+      }
+    }
+    const items=order.items.map((it,i)=>({...it, checked:activePick[i].checked, status:activePick[i].status, reason:activePick[i].reason}));
+    const anyUnpack=activePick.some(p=>p.status!=='ok');
+    if(claimRef) claimRef.onDisconnect().cancel();
+    await root.child('orders/'+order._key).update({items, status:anyUnpack?'partial':'packed', packedAt:Date.now(), packedBy:MY_NAME, claim:null});
+  }catch(e){ toast('Ошибка сохранения, повторите','err'); if(conf){conf.disabled=false; conf.textContent='✓ Подтвердить сбор';} return; }
+  claimRef=null; stopHeartbeat();
+  flash('ok');beep('ok'); toast('Заказ '+order.trackingId+(activePick.some(p=>p.status!=='ok')?' собран частично':' собран'),'ok',2200);
+  activeOrder=null; activePick=null; setMode('label'); renderOrderArea(); renderPackHeader();
+  const st=platformStats(S.platforms[curPlatformKey]);
+  if(st.complete){ toast('🎉 Платформа «'+curPlatformKey+'» собрана','ok',4000); }
+  focusScan();
+}
+function backToScan(){ activeOrder=null; activePick=null; setMode('label'); renderOrderArea(); focusScan(); }
+
+/* ============================================================
+   REPORT
+   ============================================================ */
+function buildReport(){
+  let ordersDone=0,unitsPacked=0,unitsUnpacked=0,ordersPartial=0;
+  const perPlatform={}, packedItems={}, unpackList={}, byPacker={};
+  const unpackArr=[];
+  for(const k in S.platforms){ const p=S.platforms[k]; perPlatform[k]={ordersAll:p.orders.length,ordersDone:0,unitsPacked:0,unitsUnpacked:0}; packedItems[k]={};
+    for(const o of p.orders){ if(o.status==='pending')continue; ordersDone++; perPlatform[k].ordersDone++; if(o.status==='partial')ordersPartial++;
+      if(o.packedBy) byPacker[o.packedBy]=(byPacker[o.packedBy]||0)+1;
+      for(const it of (o.items||[])){
+        if(it.status==='ok'&&it.checked){ unitsPacked+=it.qty; perPlatform[k].unitsPacked+=it.qty; const kk=it.invKey; if(!packedItems[k][kk])packedItems[k][kk]={name:it.name,variation:it.variation,qty:0}; packedItems[k][kk].qty+=it.qty; }
+        else if(it.status&&it.status!=='ok'){ unitsUnpacked+=it.qty; perPlatform[k].unitsUnpacked+=it.qty; unpackArr.push({platform:k,trackingId:o.trackingId,name:it.name,variation:it.variation,qty:it.qty,reason:reasonLabel(it.status),note:it.reason||'',by:o.packedBy||''}); }
+      }
+    }
+  }
+  return {ordersDone,ordersPartial,unitsPacked,unitsUnpacked,perPlatform,packedItems,unpackArr,byPacker};
+}
+function stat(n,l,cls){ return '<div class="stat '+(cls||'')+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'; }
+function renderReport(){
+  const r=buildReport();
+  $('#reportTitle').innerHTML='Сводка за <span class="mono">'+esc(S.date)+'</span>';
+  $('#reportStats').innerHTML=stat(r.ordersDone,'Заказов собрано','ok')+stat(r.unitsPacked,'Единиц упаковано','ok')+stat(r.unitsUnpacked,'Не упаковано',r.unitsUnpacked?'err':'')+stat(r.ordersPartial,'Частичных',r.ordersPartial?'err':'');
+  let b='';
+  b+='<div class="tabsec"><h2>По платформам</h2><table><thead><tr><th>Платформа</th><th class="num">Заказы</th><th class="num">Упаковано ед.</th><th class="num">Не упак.</th></tr></thead><tbody>';
+  for(const k in r.perPlatform){ const p=r.perPlatform[k]; b+='<tr><td>'+esc(k)+'</td><td class="num">'+p.ordersDone+' / '+p.ordersAll+'</td><td class="num">'+p.unitsPacked+'</td><td class="num">'+(p.unitsUnpacked||'—')+'</td></tr>'; }
+  b+='</tbody></table></div>';
+  if(Object.keys(r.byPacker).length){ b+='<div class="tabsec"><h2>По упаковщикам</h2><table><thead><tr><th>Упаковщик</th><th class="num">Заказов собрано</th></tr></thead><tbody>'; for(const who in r.byPacker) b+='<tr><td>'+esc(who)+'</td><td class="num">'+r.byPacker[who]+'</td></tr>'; b+='</tbody></table></div>'; }
+  for(const k in r.packedItems){ const items=Object.values(r.packedItems[k]).sort((a,b)=>b.qty-a.qty); if(!items.length)continue; b+='<div class="tabsec"><h2>Упаковано — '+esc(k)+'</h2><table><thead><tr><th>Товар</th><th>Вариация</th><th class="num">Кол-во</th></tr></thead><tbody>'; for(const it of items) b+='<tr><td>'+esc(it.name)+'</td><td>'+esc(it.variation||'—')+'</td><td class="num">'+it.qty+'</td></tr>'; b+='</tbody></table></div>'; }
+  if(r.unpackArr.length){ b+='<div class="tabsec"><h2 style="color:var(--err)">Не удалось упаковать</h2><table><thead><tr><th>Платформа</th><th>Наклейка</th><th>Товар</th><th class="num">Кол-во</th><th>Причина</th></tr></thead><tbody>'; for(const u of r.unpackArr) b+='<tr><td>'+esc(u.platform)+'</td><td class="mono">'+esc(u.trackingId)+'</td><td>'+esc(u.name)+(u.variation?' · '+esc(u.variation):'')+'</td><td class="num">'+u.qty+'</td><td>'+esc(u.reason)+(u.note?' ('+esc(u.note)+')':'')+'</td></tr>'; b+='</tbody></table></div>'; }
+  $('#reportBody').innerHTML=b;
+}
+function exportCSV(){
+  const rows=[['Платформа','Наклейка','Товар','Вариация','Кол-во','Статус','Причина','Упаковщик']];
+  for(const k in S.platforms) for(const o of S.platforms[k].orders) for(const it of (o.items||[])){
+    const status=o.status==='pending'?'не собран':(it.status&&it.status!=='ok'?'НЕ упакован':(it.checked?'упакован':'пропущен'));
+    rows.push([k,o.trackingId,it.name,it.variation,it.qty,status,(it.status&&it.status!=='ok')?reasonLabel(it.status)+(it.reason?': '+it.reason:''):'',o.packedBy||'']);
+  }
+  const csv=rows.map(r=>r.map(c=>{c=String(c==null?'':c);return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(',')).join('\r\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pack_report_'+S.date+'.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ============================================================
+   WIRING
+   ============================================================ */
+// name gate
+function showSetupNote(){
+  const n=$('#setupNote'); n.style.display='block';
+  n.innerHTML='⚙ Не задан Firebase. Откройте файл и вставьте конфиг нового проекта в <code>firebaseConfig</code>. '+
+    'Создайте проект на console.firebase.google.com → Realtime Database → правила, затем скопируйте Web App config.';
+  $('#enterBtn').disabled=true; $('#gateSub').textContent='Сначала подключите Firebase (см. ниже).';
+}
+function enter(){
+  const v=$('#nameInput').value.trim();
+  if(v.length<2){ $('#nameInput').focus(); toast('Введите имя','warn'); return; }
+  MY_NAME=v; try{localStorage.setItem('ps_name',v);}catch(e){}
+  SID = (crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random());
+  $('#meName').textContent=MY_NAME;
+  $('#namegate').classList.add('hide'); $('#appHeader').classList.remove('hide'); $('#appMain').classList.remove('hide');
+  connect();
+}
+$('#enterBtn').onclick=enter;
+$('#nameInput').addEventListener('keydown',e=>{ if(e.key==='Enter')enter(); });
+
+// seed / load
+const drop=$('#drop');
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hot')}));
+drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0]; if(f)readFile(f,seedFromBytes);});
+$('#file').addEventListener('change',e=>{const f=e.target.files[0]; if(f)readFile(f,seedFromBytes);});
+function readFile(file, cb){ const fr=new FileReader(); fr.onload=()=>{ _sourceInput=null; cb(new Uint8Array(fr.result)); }; fr.readAsArrayBuffer(file); }
+
+$('#gload').onclick=async()=>{ const buf=await fetchSheet($('#gurl').value,false); if(buf){ _sourceInput=$('#gurl').value.trim(); seedFromBytes(buf,{type:'gsheet',input:_sourceInput}); } };
+$('#gurl').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();$('#gload').click();} });
+$('#gproxy').onclick=async()=>{ if(!_proxyCtx)return; const buf=await fetchSheet(_proxyCtx,true); if(buf){ _sourceInput=_proxyCtx; seedFromBytes(buf,{type:'gsheet',input:_proxyCtx}); } };
+
+// scan
+$('#scan').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();handleScan($('#scan').value);} });
+$('#scanGo').onclick=()=>handleScan($('#scan').value);
+
+// nav
+$('#backBtn').onclick=()=>goPlatforms();
+$('#homeBtn').onclick=()=>goPlatforms();
+$('#finishBtn').onclick=()=>{ show('report'); renderReport(); };
+$('#reportBack').onclick=()=>goPlatforms();
+$('#csvBtn').onclick=exportCSV;
+$('#printBtn').onclick=()=>window.print();
+$('#soundBtn').onclick=()=>{ soundOn=!soundOn; $('#soundBtn').textContent=soundOn?'🔊':'🔇'; $('#soundBtn').classList.toggle('on',soundOn); };
+$('#onlinePill').onclick=()=>{ root.child('presence').once('value').then(s=>{ const names=[]; const now=Date.now(); s.forEach(c=>{const v=c.val(); if(v&&now-(v.at||0)<60000)names.push(v.name);}); toast('В смене: '+(names.join(', ')||'—'),'info',4000); }); };
+
+$('#refreshBtn').onclick=async()=>{ if(!_sourceInput)return; $('#refreshBtn').disabled=true; const buf=await fetchSheet(_sourceInput,false); if(buf) await addNewFromBytes(buf); $('#refreshBtn').disabled=false; };
+$('#wipeBtn').onclick=async()=>{ if(!confirm('Очистить ВСЮ смену для всех? Прогресс сборки будет удалён.'))return; if(!confirm('Точно? Действие необратимо.'))return; await root.remove(); toast('Смена очищена','ok'); location.reload(); };
+
+document.addEventListener('click',e=>{ if(!e.target.closest('.menu')) $$('.menupop').forEach(p=>p.classList.add('hide')); });
+window.addEventListener('beforeunload',()=>{ releaseIfHolding(); });
+
+// expose for inline handlers
+window.goPlatforms=goPlatforms; window.backToScan=backToScan;
+
+/* ---------- boot ---------- */
+(function boot(){
+  const saved=(()=>{try{return localStorage.getItem('ps_name');}catch(e){return null;}})();
+  if(saved) $('#nameInput').value=saved;
+  if(!configReady()) showSetupNote();
+})();
+</script>
+</body>
+</html>
