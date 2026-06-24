@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
+
 
 :root{
   --bg:#0E1116; --panel:#161A21; --panel2:#1C2129; --raised:#222936;
@@ -29,7 +30,7 @@ body{
   font-size:15px; line-height:1.45; -webkit-font-smoothing:antialiased;
   overflow-x:hidden;
 }
-button{font-family:inherit; cursor:pointer}
+button{font-family:inherit; cursor:pointer; color:inherit}
 input{font-family:inherit}
 .hide{display:none !important}
 .mono{font-family:var(--mono)}
@@ -99,10 +100,10 @@ h2{font-family:var(--disp); font-weight:600; font-size:19px; margin:0 0 4px; let
 .pgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px}
 .platform{
   text-align:left; background:var(--panel); border:1px solid var(--border); border-radius:var(--r);
-  padding:18px; transition:.15s; position:relative; overflow:hidden;
+  padding:18px; transition:.15s; position:relative; overflow:hidden; color:var(--ink);
 }
 .platform:hover{border-color:var(--line); transform:translateY(-2px)}
-.platform .pname{font-family:var(--disp); font-weight:600; font-size:18px; margin-bottom:14px}
+.platform .pname{font-family:var(--disp); font-weight:600; font-size:18px; margin-bottom:14px; color:var(--ink)}
 .platform.done{border-color:var(--accent)}
 .platform.done::after{content:"ГОТОВО"; position:absolute; top:11px; right:11px; font-size:10px; font-weight:700; letter-spacing:.1em; color:var(--accent)}
 .bar{height:7px; border-radius:99px; background:var(--raised); overflow:hidden; margin:4px 0 8px}
@@ -236,6 +237,19 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
 .takenbox .who{font-family:var(--mono); font-weight:700; color:var(--warn); font-size:20px}
 .setupnote{background:var(--panel2); border:1px solid var(--border); border-radius:var(--r-sm); padding:14px 16px; font-size:13px; color:var(--muted); margin-top:14px; text-align:left}
 .setupnote code{font-family:var(--mono); color:var(--ink); background:var(--bg); padding:1px 5px; border-radius:5px}
+
+
+/* ---------- live extras ---------- */
+.namegate{position:fixed; inset:0; z-index:120; background:var(--bg); display:grid; place-items:center; padding:20px}
+.namegate .box{width:min(420px,94vw); text-align:center}
+.namegate .tinput{width:100%; text-align:center; font-size:18px; margin:14px 0 12px}
+.online{display:inline-flex; align-items:center; gap:7px}
+.lockbadge{position:absolute; top:11px; right:11px; font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--warn)}
+.platform.locked{border-color:#473a1c}
+.setupnote{background:var(--panel2); border:1px solid var(--border); border-radius:var(--r-sm); padding:14px 16px; font-size:13px; color:var(--muted); margin-top:14px; text-align:left}
+.setupnote code{font-family:var(--mono); color:var(--ink); background:var(--bg); padding:1px 5px; border-radius:5px}
+.srcrow{display:flex; gap:10px; flex-wrap:wrap}
+.srchead{display:flex; align-items:center; gap:9px; margin-bottom:11px}
 </style>
 </head>
 <body>
@@ -243,11 +257,11 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
 <!-- ============ NAME GATE ============ -->
 <div class="namegate" id="namegate">
   <div class="box">
-    <div class="brand" style="justify-content:center; margin-bottom:6px"><span class="dot"></span><div>Pack Station Live<small>Calipokehouse · совместная сборка</small></div></div>
-    <h1 id="gateTitle">Введите имя для входа в смену</h1>
-    <p class="sub" id="gateSub">Имя видно коллегам и попадает в отчёт по упаковщику.</p>
-    <input id="nameInput" class="tinput" autocomplete="off" placeholder="Например, Joe" maxlength="24">
-    <button class="btn primary lg" id="enterBtn" style="width:100%">Войти в смену</button>
+    <div class="brand" style="justify-content:center; margin-bottom:6px"><span class="dot"></span><div>Pack Station Live<small>Calipokehouse · shared packing</small></div></div>
+    <h1 id="gateTitle">Enter your name to join the shift</h1>
+    <p class="sub" id="gateSub">Your name is visible to teammates and shows up in the per-packer report.</p>
+    <input id="nameInput" class="tinput" autocomplete="off" placeholder="e.g. Joe" maxlength="24">
+    <button class="btn primary lg" id="enterBtn" style="width:100%">Join shift</button>
     <div class="setupnote" id="setupNote" style="display:none"></div>
   </div>
 </div>
@@ -255,69 +269,76 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
 <header class="hide" id="appHeader">
   <div class="brand"><span class="dot"></span><div>Pack Station Live<small id="meName">—</small></div></div>
   <div class="spacer"></div>
-  <button class="pill online" id="onlinePill" title="Кто в смене">🟢 <b id="onlineCount">0</b> в смене</button>
+  <button class="pill online" id="onlinePill" title="Who's online">🟢 <b id="onlineCount">0</b> online</button>
   <div class="pill">📅 <b id="shiftDate">—</b></div>
   <div class="pill">✅ <b id="totalDone">0</b>/<b id="totalAll">0</b></div>
-  <button class="iconbtn on" id="soundBtn" title="Звук">🔊</button>
-  <button class="iconbtn" id="homeBtn" title="К платформам">▤</button>
+  <button class="iconbtn on" id="soundBtn" title="Sound">🔊</button>
+  <button class="iconbtn" id="homeBtn" title="Platforms">▤</button>
 </header>
 
 <main class="hide" id="appMain">
   <!-- ============ SEED / LOAD ============ -->
   <section id="screen-seed" class="hide">
-    <div class="eyebrow">Старт смены — база ещё не загружена</div>
-    <h1>Загрузите базу дня в общую сессию</h1>
-    <p class="sub" style="margin-bottom:18px">Загружает один человек (старший смены). Остальные подключатся к этой же живой сессии автоматически.</p>
+    <div class="eyebrow">Shift start — base not loaded yet</div>
+    <h1>Load today's base into the shared session</h1>
+    <p class="sub" style="margin-bottom:18px">One person (the shift lead) loads this. Everyone else joins the same live session automatically.</p>
 
+    <!-- Orders source -->
     <div class="card" style="margin-bottom:14px">
-      <div style="display:flex; align-items:center; gap:9px; margin-bottom:11px">
-        <span class="mode label">Google Таблица</span>
-        <span class="sub" style="font-size:13px">тянуть по ссылке</span>
+      <div class="srchead"><span class="mode label">Orders</span><span class="sub" style="font-size:13px">platform tabs · Google Sheet or .xlsx</span></div>
+      <div class="srcrow">
+        <input id="ordUrl" class="tinput" autocomplete="off" spellcheck="false" placeholder="https://docs.google.com/spreadsheets/d/… (orders)">
+        <button class="btn primary" id="ordLoad">Load orders</button>
       </div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap">
-        <input id="gurl" class="tinput" autocomplete="off" spellcheck="false" placeholder="https://docs.google.com/spreadsheets/d/…">
-        <button class="btn primary" id="gload">Загрузить в смену</button>
-      </div>
-      <p class="sub" id="gstatus" style="font-size:12.5px; margin-top:9px">Доступ: Поделиться → «Все, у кого есть ссылка» → Читатель. Трекинг — формат «Простой текст».</p>
-      <button class="btn hide" id="gproxy" style="margin-top:10px">↪ Попробовать через прокси</button>
+      <p class="sub" id="ordStatus" style="font-size:12.5px; margin-top:9px">Share → Anyone with the link → Viewer. Set the tracking column to “Plain text”.</p>
+      <button class="btn hide" id="ordProxy" style="margin-top:10px">↪ Try via proxy</button>
+      <label class="btn ghost" style="margin-top:10px">or choose .xlsx file<input id="ordFile" type="file" accept=".xlsx,.xls,.csv" class="hide"></label>
     </div>
 
-    <div class="drop" id="drop">
-      <p class="sub" style="margin:0 0 8px">или файл .xlsx</p>
-      <label class="btn lg" style="margin-top:4px">Выбрать файл .xlsx
-        <input type="file" id="file" accept=".xlsx,.xls,.csv" class="hide">
-      </label>
+    <!-- Inventory source (separate) -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="srchead"><span class="mode items">Inventory</span><span class="sub" style="font-size:13px">separate table · stock, location, image</span></div>
+      <div class="srcrow">
+        <input id="invUrl" class="tinput" autocomplete="off" spellcheck="false" placeholder="https://docs.google.com/spreadsheets/d/… (inventory)">
+        <button class="btn primary" id="invLoad">Load inventory</button>
+      </div>
+      <p class="sub" id="invStatus" style="font-size:12.5px; margin-top:9px">Columns: item name · variation · location · stock · barcode · image. The first sheet is used.</p>
+      <button class="btn hide" id="invProxy" style="margin-top:10px">↪ Try via proxy</button>
+      <label class="btn ghost" style="margin-top:10px">or choose .xlsx file<input id="invFile" type="file" accept=".xlsx,.xls,.csv" class="hide"></label>
     </div>
+
+    <button class="btn primary lg" id="continueBtn" disabled>Continue to platforms →</button>
   </section>
 
   <!-- ============ PLATFORMS ============ -->
   <section id="screen-platforms" class="hide">
-    <div class="eyebrow">Выбор платформы</div>
-    <h1 style="margin-bottom:16px">Выберите платформу для сбора</h1>
+    <div class="eyebrow">Choose platform</div>
+    <h1 style="margin-bottom:16px">Pick a platform to pack</h1>
     <div class="pgrid" id="pgrid"></div>
     <div style="margin-top:24px; display:flex; gap:12px; flex-wrap:wrap">
-      <button class="btn primary" id="finishBtn">📋 Отчёт смены</button>
-      <button class="btn hide" id="refreshBtn">🔄 Подтянуть новые заказы</button>
-      <button class="btn danger ghost" id="wipeBtn">Очистить смену (менеджер)</button>
+      <button class="btn primary" id="finishBtn">📋 Shift report</button>
+      <button class="btn hide" id="pullOrdersBtn">🔄 Pull new orders</button>
+      <button class="btn hide" id="updInvBtn">🔄 Update inventory</button>
+      <button class="btn danger ghost" id="wipeBtn">Clear shift (manager)</button>
     </div>
   </section>
 
   <!-- ============ PACK ============ -->
   <section id="screen-pack" class="hide">
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap">
-      <button class="btn ghost" id="backBtn">← Платформы</button>
-      <h1 id="packTitle" style="margin:0">Платформа</h1>
+      <button class="btn ghost" id="backBtn">← Platforms</button>
+      <h1 id="packTitle" style="margin:0">Platform</h1>
       <div class="spacer"></div>
-      <div class="pill">Заказы: <b id="pDone">0</b>/<b id="pAll">0</b></div>
+      <div class="pill">Orders: <b id="pDone">0</b>/<b id="pAll">0</b></div>
     </div>
     <div class="scanwrap" id="scanwrap">
       <div class="scanhead">
-        <span class="mode label" id="modeTag">Сканируйте наклейку</span>
-        <span class="who">режим: <b id="modeHint">трекинг</b></span>
+        <span class="mode label" id="modeTag">Scan label</span>
+        <span class="who">mode: <b id="modeHint">tracking</b></span>
       </div>
       <div class="scanrow">
-        <input id="scan" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Сканируйте штрихкод наклейки…">
-        <button class="btn" id="scanGo">Ввод</button>
+        <input id="scan" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scan label barcode…">
+        <button class="btn" id="scanGo">Enter</button>
       </div>
     </div>
     <div id="orderArea"></div>
@@ -326,13 +347,13 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
   <!-- ============ REPORT ============ -->
   <section id="screen-report" class="hide">
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px; flex-wrap:wrap">
-      <div class="eyebrow" style="margin:0">Отчёт смены</div>
+      <div class="eyebrow" style="margin:0">Shift report</div>
       <div class="spacer"></div>
       <button class="btn" id="csvBtn">⬇ CSV</button>
-      <button class="btn" id="printBtn">🖨 Печать</button>
-      <button class="btn ghost" id="reportBack">← Назад</button>
+      <button class="btn" id="printBtn">🖨 Print</button>
+      <button class="btn ghost" id="reportBack">← Back</button>
     </div>
-    <h1 id="reportTitle">Сводка</h1>
+    <h1 id="reportTitle">Summary</h1>
     <div class="statgrid" id="reportStats"></div>
     <div id="reportBody"></div>
   </section>
@@ -344,84 +365,62 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
 "use strict";
 /* ============================================================
    Pack Station LIVE — multi-user via Firebase Realtime Database
-   - packers type their name
-   - hard lock on order claim (transaction) until confirm
-   - atomic shared stock, live progress, presence, auto-release
+   Orders and Inventory come from two separate sources.
    ============================================================ */
 
-/* >>> PASTE YOUR NEW FIREBASE PROJECT CONFIG HERE <<< */
+/* >>> PASTE YOUR FIREBASE PROJECT CONFIG HERE <<< */
 const firebaseConfig = {
-  apiKey: "AIzaSyB2I2sR9czF6F29OZMyEZubmwQGP7nWFlc",
-  authDomain: "calipoke-packstation.firebaseapp.com",
-  databaseURL: "https://calipoke-packstation-default-rtdb.firebaseio.com",
-  projectId: "calipoke-packstation",
-  storageBucket: "calipoke-packstation.firebasestorage.app",
-  messagingSenderId: "125288117157",
-  appId: "1:125288117157:web:461b4d553e100c07b9ae4c"
+  apiKey: "PASTE_API_KEY",
+  authDomain: "PASTE.firebaseapp.com",
+  databaseURL: "https://PASTE-default-rtdb.firebaseio.com",
+  projectId: "PASTE",
+  appId: "PASTE_APP_ID"
 };
 
-const STALE_MS = 90000;      // claim auto-takeover if holder silent this long
-const HEARTBEAT_MS = 20000;  // refresh claim/presence while active
+const STALE_MS = 90000;      // claim auto-takeover if holder goes silent
+const HEARTBEAT_MS = 20000;
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const norm = v => (v==null?'':String(v)).trim().toLowerCase().replace(/\s+/g,' ');
 const keyOf = (n,va)=>norm(n)+'||'+norm(va);
 const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const safeKey = k => encodeURIComponent(String(k)).replace(/\./g,'%2E'); // RTDB-safe key
+const safeKey = k => encodeURIComponent(String(k)).replace(/\./g,'%2E');
 const PLACEHOLDER = 'data:image/svg+xml;utf8,'+encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#222936"/><text x="32" y="38" font-size="22" text-anchor="middle" fill="#5A6472">▧</text></svg>');
 
 const COL = {
-  tracking:['tracking id','tracking','tracking_id','trackingid','трек','трекинг','track','order id','order','номер заказа','order number'],
-  name:['item name','item','name','product','название','товар','наименование'],
-  variation:['variation','variant','вариация','вариант','вид'],
-  qty:['quantity','qty','count','кол-во','количество','кол'],
-  location:['location','loc','место','расположение','ряд/полка','полка','ряд','bin','shelf'],
-  stock:['stock','soh','остаток','остатки','quantity on hand','qoh','on hand','наличие'],
-  barcode:['barcode','sku','upc','штрихкод','штрих-код','код','ean'],
-  image:['image','img','photo','picture','изображение','фото','картинка','url']
+  tracking:['tracking id','tracking','tracking_id','trackingid','track','order id','order','order number'],
+  name:['item name','item','name','product','title'],
+  variation:['variation','variant'],
+  qty:['quantity','qty','count'],
+  location:['location','loc','bin','shelf','row','aisle'],
+  stock:['stock','soh','quantity on hand','qoh','on hand','available','inventory'],
+  barcode:['barcode','sku','upc','ean'],
+  image:['image','img','photo','picture','url']
 };
 function pickCol(h,kind){const hs=h.map(norm);for(const w of COL[kind]){const i=hs.indexOf(w);if(i>=0)return i;}for(let i=0;i<hs.length;i++)if(COL[kind].some(w=>hs[i].includes(w)))return i;return -1;}
-const INVENTORY_NAMES = ['inventory','stock','остатки','склад','база','catalog','каталог','остаток'];
+const INVENTORY_NAMES = ['inventory','stock','catalog'];
 
 /* ---------- runtime state ---------- */
 let db=null, root=null;
 let MY_NAME='', SID='';
 const DATE = new Date().toISOString().slice(0,10);
-let S = { date:DATE, platforms:{}, inventory:{}, barcodeIdx:{} };  // local mirror of Firebase
+let S = { date:DATE, platforms:{}, inventory:{}, barcodeIdx:{} };
 let curScreen='seed', curPlatformKey=null;
-let activeOrder=null;   // {key, platform, trackingId}
-let activePick=null;    // [{checked,status,reason}] local picking overlay (hard-locked to me)
-let claimRef=null, hbTimer=null;
+let activeOrder=null, activePick=null, claimRef=null, hbTimer=null;
 let soundOn=true;
+let _ordSource=null, _invSource=null;
+const _proxy={ord:null, inv:null};
 
 /* ============================================================
-   PARSING (shared with v1)
+   PARSING
    ============================================================ */
-function parseWorkbook(arrayBuf){
+function parseOrders(arrayBuf){
   const wb = XLSX.read(arrayBuf, {type:'array'});
-  const out = { inventory:{}, platforms:{} };
-  let invName = wb.SheetNames.find(n=>INVENTORY_NAMES.includes(norm(n)));
-  if(invName){
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[invName], {header:1, raw:false, defval:''});
-    if(rows.length>=2){
-      const h=rows[0];
-      const ci={name:pickCol(h,'name'),variation:pickCol(h,'variation'),location:pickCol(h,'location'),stock:pickCol(h,'stock'),barcode:pickCol(h,'barcode'),image:pickCol(h,'image')};
-      for(let r=1;r<rows.length;r++){
-        const row=rows[r]; const nm=String(row[ci.name]??'').trim(); if(!nm) continue;
-        const variation=ci.variation>=0?String(row[ci.variation]??'').trim():'';
-        out.inventory[keyOf(nm,variation)]={
-          ikey:keyOf(nm,variation), name:nm, variation,
-          location:ci.location>=0?String(row[ci.location]??'').trim():'',
-          stock:ci.stock>=0?(parseInt(row[ci.stock],10)||0):null,
-          barcode:ci.barcode>=0?String(row[ci.barcode]??'').trim():'',
-          image:ci.image>=0?String(row[ci.image]??'').trim():''
-        };
-      }
-    }
-  }
-  for(const sn of wb.SheetNames.filter(n=>n!==invName)){
+  const platforms={};
+  for(const sn of wb.SheetNames){
+    if(INVENTORY_NAMES.includes(norm(sn))) continue; // ignore an inventory tab if present
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:false, defval:''});
     if(rows.length<2) continue;
     const h=rows[0];
@@ -437,14 +436,38 @@ function parseWorkbook(arrayBuf){
       orders[tid].items.push({name:nm, variation, qty, invKey:keyOf(nm,variation)});
     }
     const list=Object.values(orders);
-    if(list.length) out.platforms[sn]={name:sn, orders:list};
+    if(list.length) platforms[sn]={name:sn, orders:list};
   }
-  if(Object.keys(out.platforms).length===0) throw new Error('Не нашёл вкладок с заказами (нужны tracking id и item name).');
-  return out;
+  if(Object.keys(platforms).length===0) throw new Error('No order tabs found (need "tracking id" and "item name").');
+  return platforms;
+}
+
+function parseInventorySheet(arrayBuf){
+  const wb = XLSX.read(arrayBuf, {type:'array'});
+  let name = wb.SheetNames.find(n=>INVENTORY_NAMES.includes(norm(n))) || wb.SheetNames[0];
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, raw:false, defval:''});
+  if(rows.length<2) throw new Error('Inventory sheet is empty.');
+  const h=rows[0];
+  const ci={name:pickCol(h,'name'),variation:pickCol(h,'variation'),location:pickCol(h,'location'),stock:pickCol(h,'stock'),barcode:pickCol(h,'barcode'),image:pickCol(h,'image')};
+  if(ci.name<0) throw new Error('Inventory needs an "item name" column.');
+  const map={};
+  for(let r=1;r<rows.length;r++){
+    const row=rows[r]; const nm=String(row[ci.name]??'').trim(); if(!nm) continue;
+    const variation=ci.variation>=0?String(row[ci.variation]??'').trim():'';
+    map[keyOf(nm,variation)]={
+      ikey:keyOf(nm,variation), name:nm, variation,
+      location:ci.location>=0?String(row[ci.location]??'').trim():'',
+      stock:ci.stock>=0?(parseInt(row[ci.stock],10)||0):null,
+      barcode:ci.barcode>=0?String(row[ci.barcode]??'').trim():'',
+      image:ci.image>=0?String(row[ci.image]??'').trim():''
+    };
+  }
+  if(Object.keys(map).length===0) throw new Error('No inventory rows found.');
+  return map;
 }
 
 /* ============================================================
-   FIREBASE: connect, seed, listen
+   FIREBASE
    ============================================================ */
 function configReady(){ return firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('PASTE'); }
 
@@ -453,17 +476,12 @@ function connect(){
   db = firebase.database();
   root = db.ref('packstation/'+DATE);
 
-  // presence
   const pRef = root.child('presence/'+SID);
   pRef.set({name:MY_NAME, at:Date.now()});
   pRef.onDisconnect().remove();
   setInterval(()=>pRef.child('at').set(Date.now()), HEARTBEAT_MS);
-  root.child('presence').on('value', snap=>{
-    let n=0; const now=Date.now(); snap.forEach(c=>{ const v=c.val(); if(v && now-(v.at||0)<60000) n++; });
-    $('#onlineCount').textContent=n;
-  });
+  root.child('presence').on('value', snap=>{ let n=0; const now=Date.now(); snap.forEach(c=>{const v=c.val(); if(v&&now-(v.at||0)<60000)n++;}); $('#onlineCount').textContent=n; });
 
-  // live data
   root.child('inventory').on('value', snap=>{
     S.inventory={}; S.barcodeIdx={};
     snap.forEach(c=>{ const v=c.val(); if(!v||!v.ikey) return; S.inventory[v.ikey]=v; if(v.barcode) S.barcodeIdx[norm(v.barcode)]=v.ikey; });
@@ -471,56 +489,60 @@ function connect(){
   });
   root.child('orders').on('value', snap=>{
     const platforms={};
-    snap.forEach(c=>{ const v=c.val(); if(!v) return; const pk=v.platform;
-      (platforms[pk]=platforms[pk]||{name:pk, orders:[]});
-      platforms[pk].orders.push({_key:c.key, trackingId:v.trackingId, items:v.items||[], status:v.status||'pending', claim:v.claim||null, packedBy:v.packedBy||''});
-    });
-    S.platforms=platforms;
-    renderCurrent();
+    snap.forEach(c=>{ const v=c.val(); if(!v) return; const pk=v.platform; (platforms[pk]=platforms[pk]||{name:pk,orders:[]});
+      platforms[pk].orders.push({_key:c.key, trackingId:v.trackingId, items:v.items||[], status:v.status||'pending', claim:v.claim||null, packedBy:v.packedBy||''}); });
+    S.platforms=platforms; renderCurrent();
   });
 
-  // decide: join existing session or show loader
-  root.child('meta').once('value').then(snap=>{
-    if(snap.exists()){ goPlatforms(); }
-    else { show('seed'); }
-  });
+  root.child('meta').once('value').then(snap=>{ if(snap.exists()) goPlatforms(); else show('seed'); });
 }
 
-async function seedFromBytes(buf, sourceMeta){
-  let parsed;
-  try{ parsed=parseWorkbook(buf); }catch(e){ gstatus(e.message,'err'); return false; }
-  // claim seeding so two people don't double-write
+async function seedOrders(buf, sourceMeta){
+  let platforms; try{ platforms=parseOrders(buf); }catch(e){ gstatus('ord',e.message,'err'); return; }
   const res = await root.child('meta').transaction(cur => cur ? undefined : {seededBy:MY_NAME, seededAt:Date.now(), source:sourceMeta||null});
   if(res.committed && res.snapshot.val() && res.snapshot.val().seededBy===MY_NAME){
     const updates={};
-    for(const k in parsed.inventory) updates['inventory/'+safeKey(k)] = parsed.inventory[k];
-    for(const pk in parsed.platforms){
-      for(const o of parsed.platforms[pk].orders){
-        const okey = safeKey(pk+'__'+o.trackingId);
-        updates['orders/'+okey] = { platform:pk, trackingId:o.trackingId, items:o.items, status:'pending', claim:null };
-      }
+    for(const pk in platforms) for(const o of platforms[pk].orders){
+      updates['orders/'+safeKey(pk+'__'+o.trackingId)] = {platform:pk, trackingId:o.trackingId, items:o.items, status:'pending', claim:null};
     }
     await root.update(updates);
-    toast('База загружена в смену','ok',2600);
+    let n=0; for(const pk in platforms) n+=platforms[pk].orders.length;
+    gstatus('ord','✓ Loaded '+n+' orders across '+Object.keys(platforms).length+' platforms.','ok');
+    toast('Orders loaded into shift','ok',2400);
   }else{
-    toast('Смена уже запущена — подключаюсь','info',2600);
+    gstatus('ord','Shift already started — joining the existing session.','ok');
+    toast('Shift already started — joining','info',2400);
   }
-  goPlatforms();
-  return true;
+  $('#continueBtn').disabled=false;
 }
 
-/* add only-new orders/inventory from a fresh pull (no overwrite of progress/stock) */
-async function addNewFromBytes(buf){
-  let parsed; try{ parsed=parseWorkbook(buf); }catch(e){ toast(e.message,'err'); return; }
-  const existingOrders={}; for(const pk in S.platforms) S.platforms[pk].orders.forEach(o=>existingOrders[o._key]=1);
-  const updates={}; let added=0;
-  for(const pk in parsed.platforms) for(const o of parsed.platforms[pk].orders){
-    const okey=safeKey(pk+'__'+o.trackingId);
-    if(!existingOrders[okey]){ updates['orders/'+okey]={platform:pk,trackingId:o.trackingId,items:o.items,status:'pending',claim:null}; added++; }
+async function loadInventory(buf, sourceMeta){
+  let map; try{ map=parseInventorySheet(buf); }catch(e){ gstatus('inv',e.message,'err'); return; }
+  // authoritative current inventory (avoid clobbering live stock mid-day)
+  const curSnap = (await root.child('inventory').once('value')).val() || {};
+  const existing={}; for(const k in curSnap){ const v=curSnap[k]; if(v&&v.ikey) existing[v.ikey]=v; }
+  const updates={}; let added=0, updated=0;
+  for(const ik in map){
+    const rec=map[ik]; const base='inventory/'+safeKey(ik);
+    if(existing[ik]){ // keep live stock, refresh metadata only
+      updates[base+'/name']=rec.name; updates[base+'/variation']=rec.variation;
+      updates[base+'/location']=rec.location; updates[base+'/barcode']=rec.barcode; updates[base+'/image']=rec.image;
+      updates[base+'/ikey']=ik; updated++;
+    }else{ updates[base]=rec; added++; }
   }
-  for(const k in parsed.inventory){ if(!S.inventory[k]) updates['inventory/'+safeKey(k)]=parsed.inventory[k]; }
-  if(Object.keys(updates).length) await root.update(updates);
-  toast(added?('Добавлено новых заказов: '+added):'Новых заказов нет','ok',2800);
+  await root.update(updates);
+  gstatus('inv','✓ Inventory: '+added+' new, '+updated+' updated (existing stock kept).','ok');
+  toast('Inventory loaded','ok',2400);
+}
+
+async function addNewOrders(buf){
+  let platforms; try{ platforms=parseOrders(buf); }catch(e){ toast(e.message,'err'); return; }
+  const have={}; for(const pk in S.platforms) S.platforms[pk].orders.forEach(o=>have[o._key]=1);
+  const updates={}; let added=0;
+  for(const pk in platforms) for(const o of platforms[pk].orders){ const k=safeKey(pk+'__'+o.trackingId);
+    if(!have[k]){ updates['orders/'+k]={platform:pk,trackingId:o.trackingId,items:o.items,status:'pending',claim:null}; added++; } }
+  if(added) await root.update(updates);
+  toast(added?('Added '+added+' new orders'):'No new orders','ok',2600);
 }
 
 /* ============================================================
@@ -533,15 +555,14 @@ function gsheetToExportUrl(input){
   if(/^[A-Za-z0-9-_]{20,}$/.test(raw)) return 'https://docs.google.com/spreadsheets/d/'+raw+'/export?format=xlsx';
   return null;
 }
-let _proxyCtx=null;
-async function fetchSheet(input, viaProxy){
+async function fetchSheet(input, viaProxy, kind){
   const exportUrl=gsheetToExportUrl(input);
-  if(!exportUrl){ gstatus('Не похоже на ссылку Google Таблицы.','err'); return null; }
+  if(!exportUrl){ gstatus(kind,'That does not look like a Google Sheet link.','err'); return null; }
   if(location.protocol==='file:' && !viaProxy){
-    gstatus('Открыто как файл (file://) — браузер не пускает в сеть. Разместите на GitHub Pages/localhost, либо «через прокси».','err');
-    _proxyCtx=input; $('#gproxy').classList.remove('hide'); return null;
+    gstatus(kind,'Opened as a local file (file://) — the browser blocks network access. Host on GitHub Pages/localhost, or use “via proxy”.','err');
+    _proxy[kind]=input; $('#'+kind+'Proxy').classList.remove('hide'); return null;
   }
-  gstatus(viaProxy?'Загружаю через прокси…':'Загружаю из Google…','info');
+  gstatus(kind, viaProxy?'Loading via proxy…':'Loading from Google…','info');
   const target = viaProxy ? ('https://api.allorigins.win/raw?url='+encodeURIComponent(exportUrl)) : exportUrl;
   try{
     const res=await fetch(target,{redirect:'follow',cache:'no-store',mode:'cors',credentials:'omit'});
@@ -550,14 +571,14 @@ async function fetchSheet(input, viaProxy){
     if(ct.includes('text/html')) throw new Error('private');
     const buf=new Uint8Array(await res.arrayBuffer());
     if(!(buf[0]===0x50 && buf[1]===0x4B)) throw new Error('private');
-    $('#gproxy').classList.add('hide'); return buf;
+    $('#'+kind+'Proxy').classList.add('hide'); return buf;
   }catch(err){
-    if(err.message==='private') gstatus('Нет доступа к таблице. Откройте доступ «по ссылке → Читатель».','err');
-    else { gstatus('Браузер заблокировал запрос (CORS/сеть). Можно попробовать «через прокси».','err'); if(!viaProxy){_proxyCtx=input; $('#gproxy').classList.remove('hide');} }
+    if(err.message==='private') gstatus(kind,'No access to the sheet. Set sharing to “Anyone with the link → Viewer”.','err');
+    else { gstatus(kind,'Request blocked (CORS/network). You can try “via proxy”.','err'); if(!viaProxy){_proxy[kind]=input; $('#'+kind+'Proxy').classList.remove('hide');} }
     return null;
   }
 }
-function gstatus(msg,kind){ const el=$('#gstatus'); if(!el)return; el.style.color={ok:'var(--ok)',err:'var(--err)',info:'var(--muted)'}[kind]||'var(--muted)'; el.textContent=msg; }
+function gstatus(kind,msg,type){ const el=$('#'+kind+'Status'); if(!el)return; el.style.color={ok:'var(--ok)',err:'var(--err)',info:'var(--muted)'}[type]||'var(--muted)'; el.textContent=msg; }
 
 /* ============================================================
    SOUND / TOAST / FLASH
@@ -568,7 +589,7 @@ function toast(msg,kind='info',ms=2600){ const ic={ok:'✓',err:'✕',warn:'!',i
 function flash(kind){ const w=$('#scanwrap'); if(!w)return; w.classList.remove('flash-ok','flash-err'); void w.offsetWidth; w.classList.add(kind==='err'?'flash-err':'flash-ok'); }
 
 /* ============================================================
-   NAVIGATION + RENDER ROUTER
+   NAV + RENDER ROUTER
    ============================================================ */
 function show(screen){
   curScreen=screen;
@@ -593,29 +614,28 @@ function platformStats(p){ const all=p.orders.length; const done=p.orders.filter
   return {all,done,locked,complete:all>0&&done===all}; }
 function globalStats(){ let all=0,done=0; for(const k in S.platforms){const s=platformStats(S.platforms[k]); all+=s.all; done+=s.done;} return {all,done}; }
 function renderPlatforms(){
-  const rb=$('#refreshBtn'); if(rb) rb.classList.toggle('hide', !sourceInput());
+  $('#pullOrdersBtn').classList.toggle('hide', !_ordSource);
+  $('#updInvBtn').classList.toggle('hide', !_invSource);
   const g=$('#pgrid'); g.innerHTML='';
   for(const key in S.platforms){
     const p=S.platforms[key]; const st=platformStats(p); const pct=st.all?Math.round(st.done/st.all*100):0;
     const el=document.createElement('button');
     el.className='platform'+(st.complete?' done':'')+(st.locked&&!st.complete?' locked':'');
-    el.innerHTML=(st.locked&&!st.complete?'<div class="lockbadge">🔒 '+st.locked+' в работе</div>':'')+
+    el.innerHTML=(st.locked&&!st.complete?'<div class="lockbadge">🔒 '+st.locked+' in progress</div>':'')+
       '<div class="pname">'+esc(p.name)+'</div>'+
       '<div class="bar"><i style="width:'+pct+'%"></i></div>'+
-      '<div class="meta"><span>Собрано <b>'+st.done+'</b> из <b>'+st.all+'</b></span><span>'+pct+'%</span></div>';
+      '<div class="meta"><span>Packed <b>'+st.done+'</b> of <b>'+st.all+'</b></span><span>'+pct+'%</span></div>';
     el.onclick=()=>openPlatform(key);
     g.appendChild(el);
   }
 }
-let _sourceInput=null;
-function sourceInput(){ return _sourceInput; }
 
 /* ============================================================
    PACK + CLAIM (hard lock)
    ============================================================ */
 function openPlatform(key){ curPlatformKey=key; activeOrder=null; activePick=null; show('pack'); $('#packTitle').textContent=S.platforms[key].name; setMode('label'); renderPackHeader(); renderOrderArea(); focusScan(); }
 function renderPackHeader(){ const p=S.platforms[curPlatformKey]; if(!p)return; const st=platformStats(p); $('#pDone').textContent=st.done; $('#pAll').textContent=st.all; }
-function setMode(m){ const tag=$('#modeTag'),hint=$('#modeHint'),inp=$('#scan'); if(m==='label'){tag.textContent='Сканируйте наклейку';tag.className='mode label';hint.textContent='трекинг';inp.placeholder='Сканируйте штрихкод наклейки…';}else{tag.textContent='Сканируйте товары';tag.className='mode items';hint.textContent='товар';inp.placeholder='Сканируйте штрихкод товара (или отметьте вручную)…';} }
+function setMode(m){ const tag=$('#modeTag'),hint=$('#modeHint'),inp=$('#scan'); if(m==='label'){tag.textContent='Scan label';tag.className='mode label';hint.textContent='tracking';inp.placeholder='Scan label barcode…';}else{tag.textContent='Scan items';tag.className='mode items';hint.textContent='item';inp.placeholder='Scan item barcode (or check manually)…';} }
 function focusScan(){ const i=$('#scan'); if(i){i.value='';i.focus();} }
 
 function findInPlatform(pk,tid){ const p=S.platforms[pk]; if(!p)return null; const t=norm(tid); return p.orders.find(o=>norm(o.trackingId)===t)||null; }
@@ -628,22 +648,20 @@ async function scanLabel(val){
   const order=findInPlatform(curPlatformKey,val);
   if(!order){
     const el=findAnyPlatform(val);
-    if(el){ flash('err');beep('warn'); toast('Этот трек с платформы «'+el.platform+'»','warn',3500); }
-    else { flash('err');beep('err'); toast('Наклейка не найдена: '+val,'err',3200); }
+    if(el){ flash('err');beep('warn'); toast('This label belongs to platform “'+el.platform+'”','warn',3500); }
+    else { flash('err');beep('err'); toast('Label not found: '+val,'err',3200); }
     return;
   }
-  if(order.status!=='pending'){ flash('err');beep('warn'); toast('Заказ '+order.trackingId+' уже собран ('+(order.packedBy||'')+')','warn',3200); activeOrder={key:order._key,platform:curPlatformKey,trackingId:order.trackingId}; activePick=null; setMode('items'); renderOrderArea(); return; }
+  if(order.status!=='pending'){ flash('err');beep('warn'); toast('Order '+order.trackingId+' already packed ('+(order.packedBy||'')+')','warn',3200); activeOrder={key:order._key,platform:curPlatformKey,trackingId:order.trackingId}; activePick=null; setMode('items'); renderOrderArea(); return; }
 
-  // hard-lock claim via transaction
   const cRef=root.child('orders/'+order._key+'/claim');
   let res;
   try{ res=await cRef.transaction(cur=>{ if(!cur || cur.sid===SID || (Date.now()-(cur.at||0))>STALE_MS) return {by:MY_NAME, at:Date.now(), sid:SID}; return; }); }
-  catch(e){ toast('Сеть недоступна, повторите','err'); return; }
+  catch(e){ toast('Network unavailable, try again','err'); return; }
 
   const got = res.committed && res.snapshot.val() && res.snapshot.val().sid===SID;
-  if(!got){ const h=res.snapshot.val(); flash('err');beep('warn'); toast('Заказ занят: '+((h&&h.by)||'другой упаковщик'),'warn',3500); renderOrderArea(); return; }
+  if(!got){ const h=res.snapshot.val(); flash('err');beep('warn'); toast('Order taken: '+((h&&h.by)||'another packer'),'warn',3500); renderOrderArea(); return; }
 
-  // I own it
   claimRef=cRef; cRef.onDisconnect().set(null); startHeartbeat();
   activeOrder={key:order._key, platform:curPlatformKey, trackingId:order.trackingId};
   activePick=order.items.map(()=>({checked:false,status:'ok',reason:''}));
@@ -662,58 +680,58 @@ function scanItem(val){
   if(idx<0){ const t=norm(val); idx=order.items.findIndex((it,i)=>!activePick[i].checked && activePick[i].status==='ok' && (norm(it.name)===t||norm(it.name).includes(t))); }
   if(idx>=0){ activePick[idx].checked=true; flash('ok');beep('ok'); toast('✓ '+order.items[idx].name,'ok',1500); renderOrderArea(); return; }
   if(bkey){ const inOrder=order.items.findIndex(it=>it.invKey===bkey);
-    if(inOrder>=0 && activePick[inOrder].checked){ toast('Уже отмечено','warn',2000);beep('warn'); }
-    else if(inOrder>=0){ toast('Позиция помечена «нельзя упаковать»','warn',2400);beep('warn'); }
-    else { flash('err');beep('err'); const iv=S.inventory[bkey]; toast('Товар «'+(iv?iv.name:val)+'» не из этого заказа','err',3000); }
-  } else { flash('err');beep('err'); toast('Неизвестный штрихкод: '+val,'err',2800); }
+    if(inOrder>=0 && activePick[inOrder].checked){ toast('Already checked','warn',2000);beep('warn'); }
+    else if(inOrder>=0){ toast('Item is marked as “can’t pack”','warn',2400);beep('warn'); }
+    else { flash('err');beep('err'); const iv=S.inventory[bkey]; toast('Item “'+(iv?iv.name:val)+'” is not in this order','err',3000); }
+  } else { flash('err');beep('err'); toast('Unknown item barcode: '+val,'err',2800); }
 }
 
-function reasonLabel(s){ return {out_of_stock:'Закончился',damaged:'Повреждён',other:'Иная причина'}[s]||s; }
+function reasonLabel(s){ return {out_of_stock:'Out of stock',damaged:'Damaged',other:'Other'}[s]||s; }
 
 function renderOrderArea(){
   const area=$('#orderArea'); if(!area)return;
   if(!activeOrder){
     const st=platformStats(S.platforms[curPlatformKey]||{orders:[]});
-    if(st.complete) area.innerHTML='<div class="empty"><h2 style="color:var(--accent)">✓ Платформа завершена</h2><p class="sub">Все '+st.all+' наклеек собраны.</p><div style="margin-top:14px"><button class="btn" onclick="goPlatforms()">← К платформам</button></div></div>';
-    else area.innerHTML='<div class="empty">Отсканируйте наклейку, чтобы взять заказ.<br><span style="font-size:13px">Осталось: <b class="mono">'+(st.all-st.done)+'</b> · в работе у коллег: <b class="mono">'+st.locked+'</b></span></div>';
+    if(st.complete) area.innerHTML='<div class="empty"><h2 style="color:var(--accent)">✓ Platform complete</h2><p class="sub">All '+st.all+' labels packed.</p><div style="margin-top:14px"><button class="btn" onclick="goPlatforms()">← Platforms</button></div></div>';
+    else area.innerHTML='<div class="empty">Scan a label to claim an order.<br><span style="font-size:13px">Remaining: <b class="mono">'+(st.all-st.done)+'</b> · in progress by teammates: <b class="mono">'+st.locked+'</b></span></div>';
     return;
   }
   const order=findByKey(activeOrder.key);
-  if(!order){ area.innerHTML='<div class="empty">Заказ недоступен.</div>'; return; }
+  if(!order){ area.innerHTML='<div class="empty">Order unavailable.</div>'; return; }
   const readonly = order.status!=='pending' || !activePick;
 
   if(readonly && order.status!=='pending'){
-    let h='<div class="card"><div class="orderhead"><div><div class="eyebrow" style="margin-bottom:4px">Наклейка</div><div class="trk">'+esc(order.trackingId)+'</div></div>'+
-      (order.status==='packed'?'<span class="statustag st-packed">собран</span>':'<span class="statustag st-partial">частично</span>')+'</div>'+
-      '<p class="sub" style="margin-top:10px">Собрал: <b>'+esc(order.packedBy||'—')+'</b></p>'+
-      '<div class="orderfoot"><button class="btn" onclick="backToScan()">← Сканировать следующую</button></div></div>';
-    area.innerHTML=h; return;
+    area.innerHTML='<div class="card"><div class="orderhead"><div><div class="eyebrow" style="margin-bottom:4px">Label</div><div class="trk">'+esc(order.trackingId)+'</div></div>'+
+      (order.status==='packed'?'<span class="statustag st-packed">packed</span>':'<span class="statustag st-partial">partial</span>')+'</div>'+
+      '<p class="sub" style="margin-top:10px">Packed by: <b>'+esc(order.packedBy||'—')+'</b></p>'+
+      '<div class="orderfoot"><button class="btn" onclick="backToScan()">← Scan next</button></div></div>';
+    return;
   }
 
-  const stTag='<span class="statustag st-pending">в работе · '+esc(MY_NAME)+'</span>';
-  let html='<div class="card"><div class="orderhead"><div><div class="eyebrow" style="margin-bottom:4px">Наклейка</div><div class="trk">'+esc(order.trackingId)+'</div></div>'+stTag+'<div class="spacer"></div><div class="pill">Позиций: <b>'+order.items.length+'</b></div></div><div class="items">';
+  const stTag='<span class="statustag st-pending">in progress · '+esc(MY_NAME)+'</span>';
+  let html='<div class="card"><div class="orderhead"><div><div class="eyebrow" style="margin-bottom:4px">Label</div><div class="trk">'+esc(order.trackingId)+'</div></div>'+stTag+'<div class="spacer"></div><div class="pill">Items: <b>'+order.items.length+'</b></div></div><div class="items">';
   order.items.forEach((it,idx)=>{
     const iv=S.inventory[it.invKey]||{}; const img=iv.image||PLACEHOLDER; const loc=iv.location||'—'; const stock=(iv.stock==null)?null:iv.stock;
     const pk=activePick[idx];
-    let stockChip=''; if(stock!=null){ const cls=stock<=0?'zero':(stock<it.qty?'low':''); stockChip='<span class="chip stock '+cls+'">остаток <b>'+stock+'</b></span>'; }
+    let stockChip=''; if(stock!=null){ const cls=stock<=0?'zero':(stock<it.qty?'low':''); stockChip='<span class="chip stock '+cls+'">stock <b>'+stock+'</b></span>'; }
     const cls=pk.status!=='ok'?'unpack':(pk.checked?'checked':'');
     html+='<div class="item '+cls+'">'+
       '<button class="chk" data-toggle="'+idx+'" '+(pk.status!=='ok'?'disabled':'')+'>✓</button>'+
       '<img class="thumb" src="'+esc(img)+'" onerror="this.src=\''+PLACEHOLDER+'\'">'+
       '<div><div class="iname">'+esc(it.name)+'</div>'+(it.variation?'<div class="ivar">'+esc(it.variation)+'</div>':'')+
-      '<div class="ichips"><span class="chip loc">📍 '+esc(loc)+'</span><span class="chip qty">кол-во <b>'+it.qty+'</b></span>'+stockChip+
+      '<div class="ichips"><span class="chip loc">📍 '+esc(loc)+'</span><span class="chip qty">qty <b>'+it.qty+'</b></span>'+stockChip+
       (pk.status!=='ok'?'<span class="reasontag">⛔ '+reasonLabel(pk.status)+(pk.reason?': '+esc(pk.reason):'')+'</span>':'')+'</div></div>'+
       '<div class="iact">'+
       (pk.status==='ok'
-        ? '<div class="menu"><button class="linkbtn" data-menu="'+idx+'">нельзя упаковать ▾</button><div class="menupop hide" data-pop="'+idx+'"><button data-reason="out_of_stock,'+idx+'">📦 Товар закончился</button><button data-reason="damaged,'+idx+'">💥 Товар повреждён</button><button data-reason="other,'+idx+'">✎ Иная причина…</button></div></div>'
-        : '<button class="linkbtn" data-restore="'+idx+'">↩ вернуть</button>')+
+        ? '<div class="menu"><button class="linkbtn" data-menu="'+idx+'">can’t pack ▾</button><div class="menupop hide" data-pop="'+idx+'"><button data-reason="out_of_stock,'+idx+'">📦 Out of stock</button><button data-reason="damaged,'+idx+'">💥 Damaged</button><button data-reason="other,'+idx+'">✎ Other reason…</button></div></div>'
+        : '<button class="linkbtn" data-restore="'+idx+'">↩ restore</button>')+
       '</div></div>';
   });
   html+='</div>';
   const okItems=activePick.filter(p=>p.status==='ok').length;
   const allResolved=activePick.every(p=>p.status!=='ok'||p.checked);
-  html+='<div class="orderfoot"><button class="btn ghost" data-checkall>Отметить все ('+okItems+')</button><button class="btn ghost" data-cancel>Отмена</button><div class="spacer"></div><button class="btn primary lg" data-confirm '+(allResolved?'':'disabled')+'>✓ Подтвердить сбор</button></div>';
-  if(!allResolved){ const left=activePick.filter(p=>p.status==='ok'&&!p.checked).length; html+='<div class="progress-mini"><span>Осталось отметить <b class="mono">'+left+'</b></span></div>'; }
+  html+='<div class="orderfoot"><button class="btn ghost" data-checkall>Check all ('+okItems+')</button><button class="btn ghost" data-cancel>Cancel</button><div class="spacer"></div><button class="btn primary lg" data-confirm '+(allResolved?'':'disabled')+'>✓ Confirm pick</button></div>';
+  if(!allResolved){ const left=activePick.filter(p=>p.status==='ok'&&!p.checked).length; html+='<div class="progress-mini"><span><b class="mono">'+left+'</b> left to check</span></div>'; }
   html+='</div>';
   area.innerHTML=html;
   wireOrder(order);
@@ -722,7 +740,7 @@ function renderOrderArea(){
 function wireOrder(order){
   $$('#orderArea [data-toggle]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.toggle; if(activePick[i].status!=='ok')return; activePick[i].checked=!activePick[i].checked; if(activePick[i].checked)beep('ok'); renderOrderArea(); });
   $$('#orderArea [data-menu]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const idx=b.dataset.menu; $$('#orderArea .menupop').forEach(p=>{if(p.dataset.pop!==idx)p.classList.add('hide');}); $('#orderArea [data-pop="'+idx+'"]').classList.toggle('hide'); });
-  $$('#orderArea [data-reason]').forEach(b=>b.onclick=()=>{ const [reason,idx]=b.dataset.reason.split(','); let note=''; if(reason==='other'){note=prompt('Причина:','');if(note===null)return;} activePick[+idx].status=reason; activePick[+idx].reason=note||''; activePick[+idx].checked=false; beep('warn'); renderOrderArea(); });
+  $$('#orderArea [data-reason]').forEach(b=>b.onclick=()=>{ const [reason,idx]=b.dataset.reason.split(','); let note=''; if(reason==='other'){note=prompt('Reason:','');if(note===null)return;} activePick[+idx].status=reason; activePick[+idx].reason=note||''; activePick[+idx].checked=false; beep('warn'); renderOrderArea(); });
   $$('#orderArea [data-restore]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.restore; activePick[i].status='ok'; activePick[i].reason=''; renderOrderArea(); });
   const ca=$('#orderArea [data-checkall]'); if(ca)ca.onclick=()=>{ activePick.forEach(p=>{if(p.status==='ok')p.checked=true;}); beep('ok'); renderOrderArea(); };
   const cancel=$('#orderArea [data-cancel]'); if(cancel)cancel.onclick=()=>{ releaseIfHolding(); setMode('label'); renderOrderArea(); focusScan(); };
@@ -730,9 +748,8 @@ function wireOrder(order){
 }
 
 async function confirmOrder(order){
-  if(!activePick.every(p=>p.status!=='ok'||p.checked)){ toast('Отметьте все товары или укажите причину','warn'); return; }
-  const conf=$('#orderArea [data-confirm]'); if(conf){conf.disabled=true; conf.textContent='Сохраняю…';}
-  // atomic shared stock decrement
+  if(!activePick.every(p=>p.status!=='ok'||p.checked)){ toast('Check all items or set a reason','warn'); return; }
+  const conf=$('#orderArea [data-confirm]'); if(conf){conf.disabled=true; conf.textContent='Saving…';}
   try{
     for(let i=0;i<order.items.length;i++){
       const p=activePick[i]; if(p.status==='ok' && p.checked){
@@ -744,12 +761,11 @@ async function confirmOrder(order){
     const anyUnpack=activePick.some(p=>p.status!=='ok');
     if(claimRef) claimRef.onDisconnect().cancel();
     await root.child('orders/'+order._key).update({items, status:anyUnpack?'partial':'packed', packedAt:Date.now(), packedBy:MY_NAME, claim:null});
-  }catch(e){ toast('Ошибка сохранения, повторите','err'); if(conf){conf.disabled=false; conf.textContent='✓ Подтвердить сбор';} return; }
+  }catch(e){ toast('Save failed, try again','err'); if(conf){conf.disabled=false; conf.textContent='✓ Confirm pick';} return; }
   claimRef=null; stopHeartbeat();
-  flash('ok');beep('ok'); toast('Заказ '+order.trackingId+(activePick.some(p=>p.status!=='ok')?' собран частично':' собран'),'ok',2200);
+  flash('ok');beep('ok'); toast('Order '+order.trackingId+(activePick.some(p=>p.status!=='ok')?' packed (partial)':' packed'),'ok',2200);
   activeOrder=null; activePick=null; setMode('label'); renderOrderArea(); renderPackHeader();
-  const st=platformStats(S.platforms[curPlatformKey]);
-  if(st.complete){ toast('🎉 Платформа «'+curPlatformKey+'» собрана','ok',4000); }
+  if(platformStats(S.platforms[curPlatformKey]).complete) toast('🎉 Platform “'+curPlatformKey+'” complete','ok',4000);
   focusScan();
 }
 function backToScan(){ activeOrder=null; activePick=null; setMode('label'); renderOrderArea(); focusScan(); }
@@ -759,14 +775,13 @@ function backToScan(){ activeOrder=null; activePick=null; setMode('label'); rend
    ============================================================ */
 function buildReport(){
   let ordersDone=0,unitsPacked=0,unitsUnpacked=0,ordersPartial=0;
-  const perPlatform={}, packedItems={}, unpackList={}, byPacker={};
-  const unpackArr=[];
+  const perPlatform={}, packedItems={}, byPacker={}; const unpackArr=[];
   for(const k in S.platforms){ const p=S.platforms[k]; perPlatform[k]={ordersAll:p.orders.length,ordersDone:0,unitsPacked:0,unitsUnpacked:0}; packedItems[k]={};
     for(const o of p.orders){ if(o.status==='pending')continue; ordersDone++; perPlatform[k].ordersDone++; if(o.status==='partial')ordersPartial++;
       if(o.packedBy) byPacker[o.packedBy]=(byPacker[o.packedBy]||0)+1;
       for(const it of (o.items||[])){
         if(it.status==='ok'&&it.checked){ unitsPacked+=it.qty; perPlatform[k].unitsPacked+=it.qty; const kk=it.invKey; if(!packedItems[k][kk])packedItems[k][kk]={name:it.name,variation:it.variation,qty:0}; packedItems[k][kk].qty+=it.qty; }
-        else if(it.status&&it.status!=='ok'){ unitsUnpacked+=it.qty; perPlatform[k].unitsUnpacked+=it.qty; unpackArr.push({platform:k,trackingId:o.trackingId,name:it.name,variation:it.variation,qty:it.qty,reason:reasonLabel(it.status),note:it.reason||'',by:o.packedBy||''}); }
+        else if(it.status&&it.status!=='ok'){ unitsUnpacked+=it.qty; perPlatform[k].unitsUnpacked+=it.qty; unpackArr.push({platform:k,trackingId:o.trackingId,name:it.name,variation:it.variation,qty:it.qty,reason:reasonLabel(it.status),note:it.reason||''}); }
       }
     }
   }
@@ -775,21 +790,21 @@ function buildReport(){
 function stat(n,l,cls){ return '<div class="stat '+(cls||'')+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'; }
 function renderReport(){
   const r=buildReport();
-  $('#reportTitle').innerHTML='Сводка за <span class="mono">'+esc(S.date)+'</span>';
-  $('#reportStats').innerHTML=stat(r.ordersDone,'Заказов собрано','ok')+stat(r.unitsPacked,'Единиц упаковано','ok')+stat(r.unitsUnpacked,'Не упаковано',r.unitsUnpacked?'err':'')+stat(r.ordersPartial,'Частичных',r.ordersPartial?'err':'');
+  $('#reportTitle').innerHTML='Summary for <span class="mono">'+esc(S.date)+'</span>';
+  $('#reportStats').innerHTML=stat(r.ordersDone,'Orders packed','ok')+stat(r.unitsPacked,'Units packed','ok')+stat(r.unitsUnpacked,'Not packed',r.unitsUnpacked?'err':'')+stat(r.ordersPartial,'Partial',r.ordersPartial?'err':'');
   let b='';
-  b+='<div class="tabsec"><h2>По платформам</h2><table><thead><tr><th>Платформа</th><th class="num">Заказы</th><th class="num">Упаковано ед.</th><th class="num">Не упак.</th></tr></thead><tbody>';
+  b+='<div class="tabsec"><h2>By platform</h2><table><thead><tr><th>Platform</th><th class="num">Orders</th><th class="num">Units packed</th><th class="num">Not packed</th></tr></thead><tbody>';
   for(const k in r.perPlatform){ const p=r.perPlatform[k]; b+='<tr><td>'+esc(k)+'</td><td class="num">'+p.ordersDone+' / '+p.ordersAll+'</td><td class="num">'+p.unitsPacked+'</td><td class="num">'+(p.unitsUnpacked||'—')+'</td></tr>'; }
   b+='</tbody></table></div>';
-  if(Object.keys(r.byPacker).length){ b+='<div class="tabsec"><h2>По упаковщикам</h2><table><thead><tr><th>Упаковщик</th><th class="num">Заказов собрано</th></tr></thead><tbody>'; for(const who in r.byPacker) b+='<tr><td>'+esc(who)+'</td><td class="num">'+r.byPacker[who]+'</td></tr>'; b+='</tbody></table></div>'; }
-  for(const k in r.packedItems){ const items=Object.values(r.packedItems[k]).sort((a,b)=>b.qty-a.qty); if(!items.length)continue; b+='<div class="tabsec"><h2>Упаковано — '+esc(k)+'</h2><table><thead><tr><th>Товар</th><th>Вариация</th><th class="num">Кол-во</th></tr></thead><tbody>'; for(const it of items) b+='<tr><td>'+esc(it.name)+'</td><td>'+esc(it.variation||'—')+'</td><td class="num">'+it.qty+'</td></tr>'; b+='</tbody></table></div>'; }
-  if(r.unpackArr.length){ b+='<div class="tabsec"><h2 style="color:var(--err)">Не удалось упаковать</h2><table><thead><tr><th>Платформа</th><th>Наклейка</th><th>Товар</th><th class="num">Кол-во</th><th>Причина</th></tr></thead><tbody>'; for(const u of r.unpackArr) b+='<tr><td>'+esc(u.platform)+'</td><td class="mono">'+esc(u.trackingId)+'</td><td>'+esc(u.name)+(u.variation?' · '+esc(u.variation):'')+'</td><td class="num">'+u.qty+'</td><td>'+esc(u.reason)+(u.note?' ('+esc(u.note)+')':'')+'</td></tr>'; b+='</tbody></table></div>'; }
+  if(Object.keys(r.byPacker).length){ b+='<div class="tabsec"><h2>By packer</h2><table><thead><tr><th>Packer</th><th class="num">Orders packed</th></tr></thead><tbody>'; for(const who in r.byPacker) b+='<tr><td>'+esc(who)+'</td><td class="num">'+r.byPacker[who]+'</td></tr>'; b+='</tbody></table></div>'; }
+  for(const k in r.packedItems){ const items=Object.values(r.packedItems[k]).sort((a,b)=>b.qty-a.qty); if(!items.length)continue; b+='<div class="tabsec"><h2>Packed — '+esc(k)+'</h2><table><thead><tr><th>Item</th><th>Variation</th><th class="num">Qty</th></tr></thead><tbody>'; for(const it of items) b+='<tr><td>'+esc(it.name)+'</td><td>'+esc(it.variation||'—')+'</td><td class="num">'+it.qty+'</td></tr>'; b+='</tbody></table></div>'; }
+  if(r.unpackArr.length){ b+='<div class="tabsec"><h2 style="color:var(--err)">Could not pack</h2><table><thead><tr><th>Platform</th><th>Label</th><th>Item</th><th class="num">Qty</th><th>Reason</th></tr></thead><tbody>'; for(const u of r.unpackArr) b+='<tr><td>'+esc(u.platform)+'</td><td class="mono">'+esc(u.trackingId)+'</td><td>'+esc(u.name)+(u.variation?' · '+esc(u.variation):'')+'</td><td class="num">'+u.qty+'</td><td>'+esc(u.reason)+(u.note?' ('+esc(u.note)+')':'')+'</td></tr>'; b+='</tbody></table></div>'; }
   $('#reportBody').innerHTML=b;
 }
 function exportCSV(){
-  const rows=[['Платформа','Наклейка','Товар','Вариация','Кол-во','Статус','Причина','Упаковщик']];
+  const rows=[['Platform','Label','Item','Variation','Qty','Status','Reason','Packer']];
   for(const k in S.platforms) for(const o of S.platforms[k].orders) for(const it of (o.items||[])){
-    const status=o.status==='pending'?'не собран':(it.status&&it.status!=='ok'?'НЕ упакован':(it.checked?'упакован':'пропущен'));
+    const status=o.status==='pending'?'not packed':(it.status&&it.status!=='ok'?'NOT packed':(it.checked?'packed':'skipped'));
     rows.push([k,o.trackingId,it.name,it.variation,it.qty,status,(it.status&&it.status!=='ok')?reasonLabel(it.status)+(it.reason?': '+it.reason:''):'',o.packedBy||'']);
   }
   const csv=rows.map(r=>r.map(c=>{c=String(c==null?'':c);return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(',')).join('\r\n');
@@ -799,18 +814,17 @@ function exportCSV(){
 /* ============================================================
    WIRING
    ============================================================ */
-// name gate
 function showSetupNote(){
   const n=$('#setupNote'); n.style.display='block';
-  n.innerHTML='⚙ Не задан Firebase. Откройте файл и вставьте конфиг нового проекта в <code>firebaseConfig</code>. '+
-    'Создайте проект на console.firebase.google.com → Realtime Database → правила, затем скопируйте Web App config.';
-  $('#enterBtn').disabled=true; $('#gateSub').textContent='Сначала подключите Firebase (см. ниже).';
+  n.innerHTML='⚙ Firebase is not configured. Open this file and paste your project config into <code>firebaseConfig</code>. '+
+    'Create a project at console.firebase.google.com → Realtime Database → set rules, then copy the Web App config.';
+  $('#enterBtn').disabled=true; $('#gateSub').textContent='Connect Firebase first (see below).';
 }
 function enter(){
   const v=$('#nameInput').value.trim();
-  if(v.length<2){ $('#nameInput').focus(); toast('Введите имя','warn'); return; }
+  if(v.length<2){ $('#nameInput').focus(); toast('Enter your name','warn'); return; }
   MY_NAME=v; try{localStorage.setItem('ps_name',v);}catch(e){}
-  SID = (crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random());
+  SID=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random());
   $('#meName').textContent=MY_NAME;
   $('#namegate').classList.add('hide'); $('#appHeader').classList.remove('hide'); $('#appMain').classList.remove('hide');
   connect();
@@ -818,17 +832,21 @@ function enter(){
 $('#enterBtn').onclick=enter;
 $('#nameInput').addEventListener('keydown',e=>{ if(e.key==='Enter')enter(); });
 
-// seed / load
-const drop=$('#drop');
-['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot')}));
-['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hot')}));
-drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0]; if(f)readFile(f,seedFromBytes);});
-$('#file').addEventListener('change',e=>{const f=e.target.files[0]; if(f)readFile(f,seedFromBytes);});
-function readFile(file, cb){ const fr=new FileReader(); fr.onload=()=>{ _sourceInput=null; cb(new Uint8Array(fr.result)); }; fr.readAsArrayBuffer(file); }
+function readFile(file, cb){ const fr=new FileReader(); fr.onload=()=>cb(new Uint8Array(fr.result)); fr.readAsArrayBuffer(file); }
 
-$('#gload').onclick=async()=>{ const buf=await fetchSheet($('#gurl').value,false); if(buf){ _sourceInput=$('#gurl').value.trim(); seedFromBytes(buf,{type:'gsheet',input:_sourceInput}); } };
-$('#gurl').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();$('#gload').click();} });
-$('#gproxy').onclick=async()=>{ if(!_proxyCtx)return; const buf=await fetchSheet(_proxyCtx,true); if(buf){ _sourceInput=_proxyCtx; seedFromBytes(buf,{type:'gsheet',input:_proxyCtx}); } };
+// orders source
+$('#ordLoad').onclick=async()=>{ const buf=await fetchSheet($('#ordUrl').value,false,'ord'); if(buf){ _ordSource=$('#ordUrl').value.trim(); seedOrders(buf,{type:'gsheet',input:_ordSource}); } };
+$('#ordUrl').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();$('#ordLoad').click();} });
+$('#ordProxy').onclick=async()=>{ if(!_proxy.ord)return; const buf=await fetchSheet(_proxy.ord,true,'ord'); if(buf){ _ordSource=_proxy.ord; seedOrders(buf,{type:'gsheet',input:_proxy.ord}); } };
+$('#ordFile').addEventListener('change',e=>{ const f=e.target.files[0]; if(f)readFile(f,buf=>{ _ordSource=null; seedOrders(buf,null); }); });
+
+// inventory source (separate)
+$('#invLoad').onclick=async()=>{ const buf=await fetchSheet($('#invUrl').value,false,'inv'); if(buf){ _invSource=$('#invUrl').value.trim(); loadInventory(buf,{type:'gsheet',input:_invSource}); } };
+$('#invUrl').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();$('#invLoad').click();} });
+$('#invProxy').onclick=async()=>{ if(!_proxy.inv)return; const buf=await fetchSheet(_proxy.inv,true,'inv'); if(buf){ _invSource=_proxy.inv; loadInventory(buf,{type:'gsheet',input:_proxy.inv}); } };
+$('#invFile').addEventListener('change',e=>{ const f=e.target.files[0]; if(f)readFile(f,buf=>loadInventory(buf,null)); });
+
+$('#continueBtn').onclick=()=>goPlatforms();
 
 // scan
 $('#scan').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();handleScan($('#scan').value);} });
@@ -842,15 +860,15 @@ $('#reportBack').onclick=()=>goPlatforms();
 $('#csvBtn').onclick=exportCSV;
 $('#printBtn').onclick=()=>window.print();
 $('#soundBtn').onclick=()=>{ soundOn=!soundOn; $('#soundBtn').textContent=soundOn?'🔊':'🔇'; $('#soundBtn').classList.toggle('on',soundOn); };
-$('#onlinePill').onclick=()=>{ root.child('presence').once('value').then(s=>{ const names=[]; const now=Date.now(); s.forEach(c=>{const v=c.val(); if(v&&now-(v.at||0)<60000)names.push(v.name);}); toast('В смене: '+(names.join(', ')||'—'),'info',4000); }); };
+$('#onlinePill').onclick=()=>{ root.child('presence').once('value').then(s=>{ const names=[]; const now=Date.now(); s.forEach(c=>{const v=c.val(); if(v&&now-(v.at||0)<60000)names.push(v.name);}); toast('Online: '+(names.join(', ')||'—'),'info',4000); }); };
 
-$('#refreshBtn').onclick=async()=>{ if(!_sourceInput)return; $('#refreshBtn').disabled=true; const buf=await fetchSheet(_sourceInput,false); if(buf) await addNewFromBytes(buf); $('#refreshBtn').disabled=false; };
-$('#wipeBtn').onclick=async()=>{ if(!confirm('Очистить ВСЮ смену для всех? Прогресс сборки будет удалён.'))return; if(!confirm('Точно? Действие необратимо.'))return; await root.remove(); toast('Смена очищена','ok'); location.reload(); };
+$('#pullOrdersBtn').onclick=async()=>{ if(!_ordSource)return; $('#pullOrdersBtn').disabled=true; const buf=await fetchSheet(_ordSource,false,'ord'); if(buf) await addNewOrders(buf); $('#pullOrdersBtn').disabled=false; };
+$('#updInvBtn').onclick=async()=>{ if(!_invSource)return; $('#updInvBtn').disabled=true; const buf=await fetchSheet(_invSource,false,'inv'); if(buf) await loadInventory(buf,{type:'gsheet',input:_invSource}); $('#updInvBtn').disabled=false; };
+$('#wipeBtn').onclick=async()=>{ if(!confirm('Clear the ENTIRE shift for everyone? All packing progress will be deleted.'))return; if(!confirm('Are you sure? This cannot be undone.'))return; await root.remove(); toast('Shift cleared','ok'); location.reload(); };
 
 document.addEventListener('click',e=>{ if(!e.target.closest('.menu')) $$('.menupop').forEach(p=>p.classList.add('hide')); });
 window.addEventListener('beforeunload',()=>{ releaseIfHolding(); });
 
-// expose for inline handlers
 window.goPlatforms=goPlatforms; window.backToScan=backToScan;
 
 /* ---------- boot ---------- */
