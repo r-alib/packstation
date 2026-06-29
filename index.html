@@ -197,6 +197,15 @@ h2{font-family:var(--disp); font-weight:600; font-size:19px; margin:0 0 4px; let
 .counter .cnt b{color:var(--warn); font-size:19px}
 .counter.full .cnt b{color:var(--accent)}
 .st-blocked{background:#2a1116; color:var(--err)}
+/* manual last-4 confirm / select */
+.trk.big{font-size:26px; letter-spacing:.02em; margin-top:6px}
+.confirmcard{border-color:#2a3a4a}
+.choices{display:flex; flex-direction:column; gap:9px; margin-top:12px}
+.choice{text-align:left; display:flex; flex-direction:column; gap:3px; background:var(--panel2); border:1px solid var(--border); border-radius:var(--r-sm); padding:12px 14px; transition:.12s; color:var(--ink)}
+.choice:hover{border-color:var(--accent); background:#11211a}
+.choice .trk{font-size:18px}
+.choice .sub{font-size:12.5px; color:var(--muted)}
+.choice .reasontag{margin-top:2px}
 
 .orderfoot{display:flex; gap:12px; margin-top:18px; flex-wrap:wrap}
 .orderfoot .spacer{flex:1}
@@ -384,13 +393,11 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
 
 /* >>> PASTE YOUR FIREBASE PROJECT CONFIG HERE <<< */
 const firebaseConfig = {
-  apiKey: "AIzaSyB2I2sR9czF6F29OZMyEZubmwQGP7nWFlc",
-  authDomain: "calipoke-packstation.firebaseapp.com",
-  databaseURL: "https://calipoke-packstation-default-rtdb.firebaseio.com",
-  projectId: "calipoke-packstation",
-  storageBucket: "calipoke-packstation.firebasestorage.app",
-  messagingSenderId: "125288117157",
-  appId: "1:125288117157:web:461b4d553e100c07b9ae4c"
+  apiKey: "PASTE_API_KEY",
+  authDomain: "PASTE.firebaseapp.com",
+  databaseURL: "https://PASTE-default-rtdb.firebaseio.com",
+  projectId: "PASTE",
+  appId: "PASTE_APP_ID"
 };
 
 const STALE_MS = 90000;      // claim auto-takeover if holder goes silent
@@ -425,6 +432,7 @@ const DATE = new Date().toISOString().slice(0,10);
 let S = { date:DATE, platforms:{}, inventory:{}, barcodeIdx:{} };
 let curScreen='seed', curPlatformKey=null;
 let activeOrder=null, activePick=null, claimRef=null, hbTimer=null;
+let pendingChoice=null; // manual last-4 confirm/select state
 let soundOn=true;
 let IS_ADMIN=false;
 let _ordSource=null, _invSource=null;
@@ -660,9 +668,9 @@ function renderPlatforms(){
 /* ============================================================
    PACK + CLAIM (hard lock)
    ============================================================ */
-function openPlatform(key){ curPlatformKey=key; activeOrder=null; activePick=null; show('pack'); $('#packTitle').textContent=S.platforms[key].name; setMode('label'); renderPackHeader(); renderOrderArea(); focusScan(); }
+function openPlatform(key){ curPlatformKey=key; activeOrder=null; activePick=null; pendingChoice=null; show('pack'); $('#packTitle').textContent=S.platforms[key].name; setMode('label'); renderPackHeader(); renderOrderArea(); focusScan(); }
 function renderPackHeader(){ const p=S.platforms[curPlatformKey]; if(!p)return; const st=platformStats(p); $('#pDone').textContent=st.done; $('#pAll').textContent=st.all; }
-function setMode(m){ const tag=$('#modeTag'),hint=$('#modeHint'),inp=$('#scan'); if(m==='label'){tag.textContent='Scan label';tag.className='mode label';hint.textContent='tracking';inp.placeholder='Scan label barcode…';}else{tag.textContent='Scan items';tag.className='mode items';hint.textContent='item';inp.placeholder='Scan item barcode (or check manually)…';} }
+function setMode(m){ const tag=$('#modeTag'),hint=$('#modeHint'),inp=$('#scan'); if(m==='label'){tag.textContent='Scan label';tag.className='mode label';hint.textContent='tracking';inp.placeholder='Scan label, or type last 4 digits…';}else{tag.textContent='Scan items';tag.className='mode items';hint.textContent='item';inp.placeholder='Scan item barcode (or check manually)…';} }
 function focusScan(){ const i=$('#scan'); if(i){i.value='';i.focus();} }
 
 function findInPlatform(pk,tid){ const p=S.platforms[pk]; if(!p)return null; const t=norm(tid); return p.orders.find(o=>norm(o.trackingId)===t)||null; }
@@ -671,14 +679,38 @@ function findByKey(key){ for(const k in S.platforms){ const o=S.platforms[k].ord
 
 function handleScan(raw){ const v=raw.trim(); if(!v)return; if(activeOrder) scanItem(v); else scanLabel(v); focusScan(); }
 
+function orderSummary(o){ return (o.items||[]).map(it=>esc(it.name)+((it.qty||1)>1?' ×'+it.qty:'')).join(', '); }
+
 async function scanLabel(val){
-  const order=findInPlatform(curPlatformKey,val);
-  if(!order){
-    const el=findAnyPlatform(val);
-    if(el){ flash('err');beep('warn'); toast('This label belongs to platform “'+el.platform+'”','warn',3500); }
-    else { flash('err');beep('err'); toast('Label not found: '+val,'err',3200); }
-    return;
+  pendingChoice=null;
+  // 1) exact full match (scanner or full manual entry) — claim straight away
+  const exact=findInPlatform(curPlatformKey,val);
+  if(exact){ return claimAndOpen(exact._key); }
+
+  // 2) wrong-platform full match → warn
+  const onOther=findAnyPlatform(val);
+  if(onOther){ flash('err');beep('warn'); toast('This label belongs to platform “'+onOther.platform+'”','warn',3500); return; }
+
+  // 3) short code → match by last digits (suffix) within current platform
+  const code=norm(val);
+  if(code.length>=2 && code.length<=10){
+    const p=S.platforms[curPlatformKey]; const all=(p?p.orders:[]).filter(o=>norm(o.trackingId).endsWith(code));
+    const open=all.filter(o=>o.status!=='packed');
+    if(open.length===0){
+      if(all.length>0){ flash('err');beep('warn'); toast('Order ending in '+val+' is already packed','warn',3200); }
+      else { flash('err');beep('err'); toast('No order ending in '+val+' on this platform','err',3200); }
+      return;
+    }
+    if(open.length===1){ pendingChoice={type:'confirm', key:open[0]._key, code}; beep('ok'); setMode('label'); renderOrderArea(); return; }
+    pendingChoice={type:'select', keys:open.map(o=>o._key), code}; beep('ok'); setMode('label'); renderOrderArea(); return;
   }
+
+  flash('err');beep('err'); toast('Label not found: '+val,'err',3200);
+}
+
+async function claimAndOpen(key){
+  pendingChoice=null;
+  const order=findByKey(key); if(!order){ toast('Order unavailable','err'); renderOrderArea(); return; }
   if(order.status==='packed'){ flash('err');beep('warn'); toast('Order '+order.trackingId+' already packed ('+(order.packedBy||'')+')','warn',3200); activeOrder={key:order._key,platform:curPlatformKey,trackingId:order.trackingId}; activePick=null; setMode('items'); renderOrderArea(); return; }
 
   const cRef=root.child('orders/'+order._key+'/claim');
@@ -717,12 +749,15 @@ function scanItem(val){
 
 function reasonLabel(s){ return {out_of_stock:'Out of stock',damaged:'Damaged',other:'Other'}[s]||s; }
 
+function trkHi(tid, code){ const t=String(tid); const c=String(code||''); if(c && norm(t).endsWith(norm(c))){ const cut=t.length-c.length; return esc(t.slice(0,cut))+'<b style="color:var(--accent)">'+esc(t.slice(cut))+'</b>'; } return esc(t); }
+
 function renderOrderArea(){
   const area=$('#orderArea'); if(!area)return;
   if(!activeOrder){
+    if(pendingChoice){ renderPending(area); return; }
     const st=platformStats(S.platforms[curPlatformKey]||{orders:[]});
     if(st.complete) area.innerHTML='<div class="empty"><h2 style="color:var(--accent)">✓ Platform complete</h2><p class="sub">All '+st.all+' labels packed.</p><div style="margin-top:14px"><button class="btn" onclick="goPlatforms()">← Platforms</button></div></div>';
-    else area.innerHTML='<div class="empty">Scan a label to claim an order.<br><span style="font-size:13px">Remaining: <b class="mono">'+(st.all-st.done)+'</b> · in progress by teammates: <b class="mono">'+st.locked+'</b></span></div>';
+    else area.innerHTML='<div class="empty">Scan a label, or type the last 4 digits of the tracking number.<br><span style="font-size:13px">Remaining: <b class="mono">'+(st.all-st.done)+'</b> · in progress by teammates: <b class="mono">'+st.locked+'</b></span></div>';
     return;
   }
   const order=findByKey(activeOrder.key);
@@ -779,6 +814,31 @@ function renderOrderArea(){
   wireOrder(order);
 }
 
+function renderPending(area){
+  if(pendingChoice.type==='confirm'){
+    const o=findByKey(pendingChoice.key);
+    if(!o){ pendingChoice=null; renderOrderArea(); return; }
+    area.innerHTML='<div class="card confirmcard"><div class="eyebrow">Is this the order you’re packing?</div>'+
+      '<div class="trk big">'+trkHi(o.trackingId, pendingChoice.code)+'</div>'+
+      '<div class="sub" style="margin-top:8px">'+(o.items||[]).length+' item(s): '+orderSummary(o)+'</div>'+
+      (o.status==='unpacked'?'<div class="reasontag" style="margin-top:8px">⛔ previously not packed'+(o.blockReason?' — '+esc(o.blockReason):'')+'</div>':'')+
+      '<div class="orderfoot"><button class="btn ghost" data-cancel-pick>✗ No, cancel</button><div class="spacer"></div><button class="btn primary lg" data-do-pick="'+esc(o._key)+'">✓ Yes, pack this</button></div></div>';
+  } else {
+    const list=pendingChoice.keys.map(k=>findByKey(k)).filter(Boolean);
+    if(list.length===0){ pendingChoice=null; renderOrderArea(); return; }
+    let h='<div class="card"><div class="eyebrow" style="color:var(--warn)">'+list.length+' orders end with “'+esc(pendingChoice.code)+'” — choose the right one</div><div class="choices">';
+    for(const o of list){
+      h+='<button class="choice" data-do-pick="'+esc(o._key)+'"><span class="trk">'+trkHi(o.trackingId, pendingChoice.code)+'</span>'+
+         '<span class="sub">'+(o.items||[]).length+' item(s) · '+orderSummary(o)+'</span>'+
+         (o.status==='unpacked'?'<span class="reasontag">⛔ previously not packed</span>':'')+'</button>';
+    }
+    h+='</div><div class="orderfoot"><button class="btn ghost" data-cancel-pick>Cancel</button></div></div>';
+    area.innerHTML=h;
+  }
+  $$('#orderArea [data-do-pick]').forEach(b=>b.onclick=()=>claimAndOpen(b.dataset.doPick));
+  const c=$('#orderArea [data-cancel-pick]'); if(c)c.onclick=()=>{ pendingChoice=null; renderOrderArea(); focusScan(); };
+}
+
 function wireOrder(order){
   $$('#orderArea [data-toggle]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.toggle; const pk=activePick[i]; if(pk.status!=='ok')return; const q=pk.qty||1; pk.count = pk.count>=q?0:q; if(pk.count>0)beep('ok'); renderOrderArea(); });
   $$('#orderArea [data-inc]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.inc; const pk=activePick[i]; const q=pk.qty||1; if(pk.status!=='ok'||pk.count>=q)return; pk.count++; beep('ok'); renderOrderArea(); });
@@ -820,7 +880,7 @@ async function confirmOrder(order){
   if(!isBlocked && platformStats(S.platforms[curPlatformKey]).complete) toast('🎉 Platform “'+curPlatformKey+'” complete','ok',4000);
   focusScan();
 }
-function backToScan(){ activeOrder=null; activePick=null; setMode('label'); renderOrderArea(); focusScan(); }
+function backToScan(){ activeOrder=null; activePick=null; pendingChoice=null; setMode('label'); renderOrderArea(); focusScan(); }
 
 /* ============================================================
    REPORT
