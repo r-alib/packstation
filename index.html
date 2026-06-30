@@ -105,7 +105,7 @@ h2{font-family:var(--disp); font-weight:600; font-size:19px; margin:0 0 4px; let
 .platform:hover{border-color:var(--line); transform:translateY(-2px)}
 .platform .pname{font-family:var(--disp); font-weight:600; font-size:18px; margin-bottom:14px; color:var(--ink)}
 .platform.done{border-color:var(--accent)}
-.platform.done::after{content:"ГОТОВО"; position:absolute; top:11px; right:11px; font-size:10px; font-weight:700; letter-spacing:.1em; color:var(--accent)}
+.platform.done::after{content:"DONE"; position:absolute; top:11px; right:11px; font-size:10px; font-weight:700; letter-spacing:.1em; color:var(--accent)}
 .bar{height:7px; border-radius:99px; background:var(--raised); overflow:hidden; margin:4px 0 8px}
 .bar > i{display:block; height:100%; background:var(--accent); transition:width .3s}
 .platform .meta{display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted)}
@@ -204,7 +204,10 @@ h2{font-family:var(--disp); font-weight:600; font-size:19px; margin:0 0 4px; let
 .choice{text-align:left; display:flex; flex-direction:column; gap:3px; background:var(--panel2); border:1px solid var(--border); border-radius:var(--r-sm); padding:12px 14px; transition:.12s; color:var(--ink)}
 .choice:hover{border-color:var(--accent); background:#11211a}
 .choice .trk{font-size:18px}
+.choice .choicetop{display:flex; align-items:center; gap:10px; justify-content:space-between}
 .choice .sub{font-size:12.5px; color:var(--muted)}
+.choices.scroll{max-height:58vh; overflow:auto; padding-right:4px}
+.st-todo{background:#1a1f28; color:var(--muted)}
 .choice .reasontag{margin-top:2px}
 
 .orderfoot{display:flex; gap:12px; margin-top:18px; flex-wrap:wrap}
@@ -292,7 +295,7 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
   <div class="brand"><span class="dot"></span><div>Pack Station Live<small id="meName">—</small></div></div>
   <div class="spacer"></div>
   <button class="pill online" id="onlinePill" title="Who's online">🟢 <b id="onlineCount">0</b> online</button>
-  <div class="pill">📅 <b id="shiftDate">—</b></div>
+  <div class="pill" title="Shift started">🗓 <b id="shiftDate">—</b></div>
   <div class="pill">✅ <b id="totalDone">0</b>/<b id="totalAll">0</b></div>
   <button class="iconbtn on" id="soundBtn" title="Sound">🔊</button>
   <button class="iconbtn" id="homeBtn" title="Platforms">▤</button>
@@ -340,7 +343,7 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
     <div id="adminActions" style="margin-top:24px; display:flex; gap:12px; flex-wrap:wrap">
       <button class="btn primary" id="finishBtn">📋 Shift report</button>
       <button class="btn ghost" id="loadDataBtn">⚙ Load data</button>
-      <button class="btn hide" id="pullOrdersBtn">🔄 Pull new orders</button>
+      <button class="btn hide" id="pullOrdersBtn">🔄 Sync orders</button>
       <button class="btn hide" id="updInvBtn">🔄 Update inventory</button>
       <button class="btn danger ghost" id="wipeBtn">Clear shift (manager)</button>
     </div>
@@ -362,6 +365,7 @@ td.num,th.num{text-align:right; font-family:var(--mono)}
       <div class="scanrow">
         <input id="scan" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scan label barcode…">
         <button class="btn" id="scanGo">Enter</button>
+        <button class="btn ghost" id="showAllBtn">▤ Show all</button>
       </div>
     </div>
     <div id="orderArea"></div>
@@ -408,6 +412,7 @@ const HEARTBEAT_MS = 20000;
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const norm = v => (v==null?'':String(v)).trim().toLowerCase().replace(/\s+/g,' ');
+const clean = v => (v==null?'':String(v)).toLowerCase().replace(/[^a-z0-9]/g,'');
 const keyOf = (n,va)=>norm(n)+'||'+norm(va);
 const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const safeKey = k => encodeURIComponent(String(k)).replace(/\./g,'%2E');
@@ -430,8 +435,10 @@ const INVENTORY_NAMES = ['inventory','stock','catalog'];
 /* ---------- runtime state ---------- */
 let db=null, root=null;
 let MY_NAME='', SID='';
-const DATE = new Date().toISOString().slice(0,10);
-let S = { date:DATE, platforms:{}, inventory:{}, barcodeIdx:{} };
+const ROOT_PATH = 'packstation/current'; // persists until the admin clears the shift — no per-day reset
+const TODAY = (d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'))(new Date());
+const fmtDate = ts => { try{ const d=new Date(ts); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }catch(e){ return TODAY; } };
+let S = { date:'', startedAt:null, platforms:{}, inventory:{}, barcodeIdx:{} };
 let curScreen='seed', curPlatformKey=null;
 let activeOrder=null, activePick=null, claimRef=null, hbTimer=null;
 let pendingChoice=null; // manual last-4 confirm/select state
@@ -501,7 +508,7 @@ function configReady(){ return firebaseConfig.apiKey && !firebaseConfig.apiKey.s
 function connect(){
   firebase.initializeApp(firebaseConfig);
   db = firebase.database();
-  root = db.ref('packstation/'+DATE);
+  root = db.ref(ROOT_PATH);
 
   const pRef = root.child('presence/'+SID);
   pRef.set({name:MY_NAME, at:Date.now()});
@@ -520,6 +527,8 @@ function connect(){
       platforms[pk].orders.push({_key:c.key, trackingId:v.trackingId, items:v.items||[], status:v.status||'pending', claim:v.claim||null, packedBy:v.packedBy||'', blockReason:v.blockReason||''}); });
     S.platforms=platforms; renderCurrent();
   });
+
+  root.child('meta').on('value', snap=>{ const m=snap.val(); S.startedAt=(m&&m.seededAt)||null; S.date=S.startedAt?fmtDate(S.startedAt):''; if(curScreen==='platforms'||curScreen==='report') renderCurrent(); });
 
   root.child('meta').once('value').then(snap=>{ const has=snap.exists(); if(IS_ADMIN){ if(has) goPlatforms(); else show('seed'); } else { goPlatforms(); } });
 }
@@ -564,12 +573,38 @@ async function loadInventory(buf, sourceMeta){
 
 async function addNewOrders(buf){
   let platforms; try{ platforms=parseOrders(buf); }catch(e){ toast(e.message,'err'); return; }
-  const have={}; for(const pk in S.platforms) S.platforms[pk].orders.forEach(o=>have[o._key]=1);
+  const sheetPlatforms=new Set(Object.keys(platforms));
+  const sheetKeys=new Set();
+  for(const pk in platforms) for(const o of platforms[pk].orders) sheetKeys.add(safeKey(pk+'__'+o.trackingId));
+  const cur={}; for(const pk in S.platforms) S.platforms[pk].orders.forEach(o=>cur[o._key]=o);
+
   const updates={}; let added=0;
   for(const pk in platforms) for(const o of platforms[pk].orders){ const k=safeKey(pk+'__'+o.trackingId);
-    if(!have[k]){ updates['orders/'+k]={platform:pk,trackingId:o.trackingId,items:o.items,status:'pending',claim:null}; added++; } }
-  if(added) await root.update(updates);
-  toast(added?('Added '+added+' new orders'):'No new orders','ok',2600);
+    if(!(k in cur)){ updates['orders/'+k]={platform:pk,trackingId:o.trackingId,items:o.items,status:'pending',claim:null}; added++; } }
+
+  // removals: present in Firebase but gone from the sheet — only safe ones
+  const now=Date.now(); const removable=[]; let keptHandled=0;
+  for(const k in cur){ const o=cur[k];
+    if(sheetKeys.has(k)) continue;                 // still in sheet
+    if(!sheetPlatforms.has(o.platform)) continue;  // platform not part of this refresh → leave alone
+    const claimed = o.claim && (now-(o.claim.at||0))<STALE_MS;
+    if(o.status==='pending' && !claimed) removable.push(k);  // untouched & free → safe to drop
+    else keptHandled++;                            // packed / not-packed / in-progress → keep
+  }
+
+  if(removable.length){
+    let msg='Sync with the sheet:\n• add '+added+' new\n• remove '+removable.length+' no longer in the sheet';
+    if(keptHandled) msg+='\n• keep '+keptHandled+' missing but already packed / in-progress';
+    msg+='\n\nRemove them? (Cancel = only add new)';
+    if(confirm(msg)){ for(const k of removable) updates['orders/'+k]=null; }
+    else removable.length=0;
+  }
+
+  if(Object.keys(updates).length===0){ toast(keptHandled?('No changes · '+keptHandled+' missing but kept'):'No changes','info',2800); return; }
+  await root.update(updates);
+  let t='Added '+added+', removed '+removable.length;
+  if(keptHandled) t+=' · '+keptHandled+' kept (packed/active)';
+  toast(t,'ok',3800);
 }
 
 /* ============================================================
@@ -626,7 +661,7 @@ function show(screen){
 }
 function goPlatforms(){ show('platforms'); renderPlatforms(); }
 function renderCurrent(){
-  $('#shiftDate').textContent=S.date;
+  $('#shiftDate').textContent=S.date||'—';
   const g=globalStats(); $('#totalDone').textContent=g.done; $('#totalAll').textContent=g.all;
   if(curScreen==='platforms') renderPlatforms();
   else if(curScreen==='pack'){ renderPackHeader(); renderOrderArea(); }
@@ -647,7 +682,7 @@ function renderPlatforms(){
   const g=$('#pgrid');
   if(Object.keys(S.platforms).length===0){
     if(IS_ADMIN) g.innerHTML='<div class="empty">No data loaded yet.<br><button class="btn primary" id="goSeedBtn" style="margin-top:12px">Load data →</button></div>';
-    else g.innerHTML='<div class="empty">⏳ Waiting for the admin to load today’s data.<br><span style="font-size:13px">This screen updates automatically when it’s ready.</span><br><button class="btn" id="staffRefresh" style="margin-top:14px">↻ Refresh</button></div>';
+    else g.innerHTML='<div class="empty">⏳ Waiting for the admin to load orders.<br><span style="font-size:13px">This screen updates automatically when orders are ready.</span><br><button class="btn" id="staffRefresh" style="margin-top:14px">↻ Refresh</button></div>';
     const gs=$('#goSeedBtn'); if(gs) gs.onclick=()=>show('seed');
     const sr=$('#staffRefresh'); if(sr) sr.onclick=()=>{ renderPlatforms(); toast('Refreshed','info',1400); };
     return;
@@ -675,8 +710,8 @@ function renderPackHeader(){ const p=S.platforms[curPlatformKey]; if(!p)return; 
 function setMode(m){ const tag=$('#modeTag'),hint=$('#modeHint'),inp=$('#scan'); if(m==='label'){tag.textContent='Scan label';tag.className='mode label';hint.textContent='tracking';inp.placeholder='Scan label, or type last 4 digits…';}else{tag.textContent='Scan items';tag.className='mode items';hint.textContent='item';inp.placeholder='Scan item barcode (or check manually)…';} }
 function focusScan(){ const i=$('#scan'); if(i){i.value='';i.focus();} }
 
-function findInPlatform(pk,tid){ const p=S.platforms[pk]; if(!p)return null; const t=norm(tid); return p.orders.find(o=>norm(o.trackingId)===t)||null; }
-function findAnyPlatform(tid){ const t=norm(tid); for(const k in S.platforms){ const o=S.platforms[k].orders.find(o=>norm(o.trackingId)===t); if(o)return {platform:k,order:o}; } return null; }
+function findInPlatform(pk,tid){ const p=S.platforms[pk]; if(!p)return null; const t=norm(tid),c=clean(tid); return p.orders.find(o=>norm(o.trackingId)===t)||p.orders.find(o=>clean(o.trackingId)===c)||null; }
+function findAnyPlatform(tid){ const t=norm(tid),c=clean(tid); for(const k in S.platforms){ const o=S.platforms[k].orders.find(o=>norm(o.trackingId)===t)||S.platforms[k].orders.find(o=>clean(o.trackingId)===c); if(o)return {platform:k,order:o}; } return null; }
 function findByKey(key){ for(const k in S.platforms){ const o=S.platforms[k].orders.find(o=>o._key===key); if(o)return o; } return null; }
 
 function handleScan(raw){ const v=raw.trim(); if(!v)return; if(activeOrder) scanItem(v); else scanLabel(v); focusScan(); }
@@ -685,29 +720,40 @@ function orderSummary(o){ return (o.items||[]).map(it=>esc(it.name)+((it.qty||1)
 
 async function scanLabel(val){
   pendingChoice=null;
-  // 1) exact full match (scanner or full manual entry) — claim straight away
-  const exact=findInPlatform(curPlatformKey,val);
-  if(exact){ return claimAndOpen(exact._key); }
+  const cv=clean(val);
+  if(cv.length<2){ flash('err');beep('err'); toast('Type at least the last 3-4 digits','err',3000); return; }
+  const list=(S.platforms[curPlatformKey]||{orders:[]}).orders;
 
-  // 2) wrong-platform full match → warn
-  const onOther=findAnyPlatform(val);
-  if(onOther){ flash('err');beep('warn'); toast('This label belongs to platform “'+onOther.platform+'”','warn',3500); return; }
+  // exact (current platform) → straight in
+  const exact=list.find(o=>clean(o.trackingId)===cv);
+  if(exact) return claimAndOpen(exact._key);
 
-  // 3) short code → match by last digits (suffix) within current platform
-  const code=norm(val);
-  if(code.length>=2 && code.length<=10){
-    const p=S.platforms[curPlatformKey]; const all=(p?p.orders:[]).filter(o=>norm(o.trackingId).endsWith(code));
-    const open=all.filter(o=>o.status!=='packed');
-    if(open.length===0){
-      if(all.length>0){ flash('err');beep('warn'); toast('Order ending in '+val+' is already packed','warn',3200); }
-      else { flash('err');beep('err'); toast('No order ending in '+val+' on this platform','err',3200); }
-      return;
-    }
-    if(open.length===1){ pendingChoice={type:'confirm', key:open[0]._key, code}; beep('ok'); setMode('label'); renderOrderArea(); return; }
-    pendingChoice={type:'select', keys:open.map(o=>o._key), code}; beep('ok'); setMode('label'); renderOrderArea(); return;
+  // suffix alignment in EITHER direction, current platform:
+  //  - scan longer than stored number → stored is a tail of the scan (carrier prefix)
+  //  - typed short code → input is a tail of the stored number (last digits)
+  const matches=list.filter(o=>{ const ct=clean(o.trackingId); if(!ct) return false;
+    return cv.length>=ct.length ? (ct.length>=4 && cv.endsWith(ct)) : (cv.length>=3 && ct.endsWith(cv)); });
+
+  if(matches.length===0){
+    const other=findOtherPlatformMatch(cv);
+    if(other){ flash('err');beep('warn'); toast('This label belongs to platform “'+other+'”','warn',3500); }
+    else { flash('err');beep('err'); toast('No order matching '+val+' on this platform','err',3200); }
+    return;
   }
+  if(matches.length===1){
+    const o=matches[0]; const ct=clean(o.trackingId);
+    if(o.status==='packed') return claimAndOpen(o._key);        // shows "already packed" + Pack again
+    if(cv.length>=ct.length) return claimAndOpen(o._key);       // exact / long scan → claim now
+    pendingChoice={type:'confirm', key:o._key, code:cv}; beep('ok'); setMode('label'); renderOrderArea(); return; // short code → confirm
+  }
+  pendingChoice={type:'select', keys:matches.map(o=>o._key), code:cv}; beep('ok'); setMode('label'); renderOrderArea();
+}
 
-  flash('err');beep('err'); toast('Label not found: '+val,'err',3200);
+function findOtherPlatformMatch(cv){
+  for(const k in S.platforms){ if(k===curPlatformKey) continue;
+    const o=S.platforms[k].orders.find(o=>{ const ct=clean(o.trackingId); if(ct.length<4) return false; return cv.length>=ct.length?cv.endsWith(ct):(cv.length>=3&&ct.endsWith(cv)); });
+    if(o) return k; }
+  return null;
 }
 
 async function claimAndOpen(key){
@@ -734,6 +780,21 @@ function startHeartbeat(){ stopHeartbeat(); hbTimer=setInterval(()=>{ if(claimRe
 function stopHeartbeat(){ if(hbTimer){clearInterval(hbTimer); hbTimer=null;} }
 function releaseIfHolding(){ if(claimRef){ try{claimRef.onDisconnect().cancel(); claimRef.set(null);}catch(e){} claimRef=null; } stopHeartbeat(); activeOrder=null; activePick=null; }
 
+async function repackOrder(key, wasPacked){
+  const o=findByKey(key); if(!o){ toast('Order unavailable','err'); return; }
+  if(wasPacked && !confirm('Reopen this packed order? Its stock will be returned and it must be packed again.')) return;
+  try{
+    if(wasPacked){ // it was fully packed → give the stock back before re-packing
+      for(const it of (o.items||[])){ const iv=S.inventory[it.invKey]; if(iv && iv.stock!=null){ await root.child('inventory/'+safeKey(it.invKey)+'/stock').transaction(s=>(s==null?null:s+(it.qty||1))); } }
+    }
+    await root.child('orders/'+key).update({status:'pending', packedBy:'', blockReason:null, packedAt:null, claim:null});
+  }catch(e){ toast('Could not reopen the order','err'); return; }
+  const local=findByKey(key); if(local) local.status='pending';   // optimistic so claim proceeds
+  toast('Order '+o.trackingId+' reopened'+(wasPacked?' — stock returned':''),'info',2600);
+  activeOrder=null; activePick=null; pendingChoice=null;
+  claimAndOpen(key);
+}
+
 function scanItem(val){
   const order=findByKey(activeOrder.key); if(!order || !activePick){ setMode('label'); return; }
   const bkey=S.barcodeIdx[norm(val)];
@@ -751,7 +812,7 @@ function scanItem(val){
 
 function reasonLabel(s){ return {out_of_stock:'Out of stock',damaged:'Damaged',other:'Other'}[s]||s; }
 
-function trkHi(tid, code){ const t=String(tid); const c=String(code||''); if(c && norm(t).endsWith(norm(c))){ const cut=t.length-c.length; return esc(t.slice(0,cut))+'<b style="color:var(--accent)">'+esc(t.slice(cut))+'</b>'; } return esc(t); }
+function trkHi(tid, code){ const t=String(tid); const c=clean(code); if(!c) return esc(t); for(let i=0;i<t.length;i++){ if(clean(t.slice(i))===c) return esc(t.slice(0,i))+'<b style="color:var(--accent)">'+esc(t.slice(i))+'</b>'; } return esc(t); }
 
 function renderOrderArea(){
   const area=$('#orderArea'); if(!area)return;
@@ -759,7 +820,7 @@ function renderOrderArea(){
     if(pendingChoice){ renderPending(area); return; }
     const st=platformStats(S.platforms[curPlatformKey]||{orders:[]});
     if(st.complete) area.innerHTML='<div class="empty"><h2 style="color:var(--accent)">✓ Platform complete</h2><p class="sub">All '+st.all+' labels packed.</p><div style="margin-top:14px"><button class="btn" onclick="goPlatforms()">← Platforms</button></div></div>';
-    else area.innerHTML='<div class="empty">Scan a label, or type the last 4 digits of the tracking number.<br><span style="font-size:13px">Remaining: <b class="mono">'+(st.all-st.done)+'</b> · in progress by teammates: <b class="mono">'+st.locked+'</b></span></div>';
+    else area.innerHTML='<div class="empty">Scan a label, type the last 4 digits, or tap <b>Show all</b>.<br><span style="font-size:13px">Remaining: <b class="mono">'+(st.all-st.done)+'</b> · in progress by teammates: <b class="mono">'+st.locked+'</b></span></div>';
     return;
   }
   const order=findByKey(activeOrder.key);
@@ -772,7 +833,10 @@ function renderOrderArea(){
       (packed?'<span class="statustag st-packed">packed</span>':'<span class="statustag st-blocked">not packed</span>')+'</div>'+
       '<p class="sub" style="margin-top:10px">'+(packed?'Packed by: ':'Last handled by: ')+'<b>'+esc(order.packedBy||'—')+'</b></p>'+
       (!packed&&order.blockReason?'<p class="reasontag" style="margin-top:6px">⛔ '+esc(order.blockReason)+'</p>':'')+
-      '<div class="orderfoot"><button class="btn" onclick="backToScan()">← Scan next</button></div></div>';
+      '<div class="orderfoot"><button class="btn ghost" onclick="backToScan()">← Scan next</button><div class="spacer"></div>'+
+      (packed?'<button class="btn" id="repackBtn">↺ Pack again</button>':'<button class="btn primary" id="repackBtn">Pack this order →</button>')+
+      '</div></div>';
+    const rb=$('#repackBtn'); if(rb) rb.onclick=()=>repackOrder(order._key, packed);
     return;
   }
 
@@ -816,6 +880,14 @@ function renderOrderArea(){
   wireOrder(order);
 }
 
+function orderStatusTag(o){
+  if(o.status==='packed') return '<span class="statustag st-packed">packed</span>';
+  if(o.status==='unpacked') return '<span class="statustag st-blocked">not packed</span>';
+  const now=Date.now(); if(o.claim && now-(o.claim.at||0)<STALE_MS) return '<span class="statustag st-pending">in progress</span>';
+  return '<span class="statustag st-todo">to pack</span>';
+}
+function orderSortRank(o){ if(o.status==='packed')return 3; if(o.status==='unpacked')return 1; const now=Date.now(); if(o.claim&&now-(o.claim.at||0)<STALE_MS)return 2; return 0; }
+
 function renderPending(area){
   if(pendingChoice.type==='confirm'){
     const o=findByKey(pendingChoice.key);
@@ -826,13 +898,17 @@ function renderPending(area){
       (o.status==='unpacked'?'<div class="reasontag" style="margin-top:8px">⛔ previously not packed'+(o.blockReason?' — '+esc(o.blockReason):'')+'</div>':'')+
       '<div class="orderfoot"><button class="btn ghost" data-cancel-pick>✗ No, cancel</button><div class="spacer"></div><button class="btn primary lg" data-do-pick="'+esc(o._key)+'">✓ Yes, pack this</button></div></div>';
   } else {
-    const list=pendingChoice.keys.map(k=>findByKey(k)).filter(Boolean);
-    if(list.length===0){ pendingChoice=null; renderOrderArea(); return; }
-    let h='<div class="card"><div class="eyebrow" style="color:var(--warn)">'+list.length+' orders end with “'+esc(pendingChoice.code)+'” — choose the right one</div><div class="choices">';
+    const isAll = pendingChoice.type==='all';
+    let list = isAll ? (S.platforms[curPlatformKey]||{orders:[]}).orders.slice() : pendingChoice.keys.map(k=>findByKey(k)).filter(Boolean);
+    if(list.length===0){ pendingChoice=null; renderOrderArea(); toast('No orders to show','info',1800); return; }
+    if(isAll) list.sort((a,b)=> orderSortRank(a)-orderSortRank(b) || String(a.trackingId).localeCompare(String(b.trackingId)));
+    const head = isAll
+      ? 'All orders · '+esc(curPlatformKey)+' ('+list.length+') — tap one to open'
+      : list.length+' orders end with “'+esc(pendingChoice.code)+'” — choose the right one';
+    let h='<div class="card"><div class="eyebrow"'+(isAll?'':' style="color:var(--warn)"')+'>'+head+'</div><div class="choices'+(isAll?' scroll':'')+'">';
     for(const o of list){
-      h+='<button class="choice" data-do-pick="'+esc(o._key)+'"><span class="trk">'+trkHi(o.trackingId, pendingChoice.code)+'</span>'+
-         '<span class="sub">'+(o.items||[]).length+' item(s) · '+orderSummary(o)+'</span>'+
-         (o.status==='unpacked'?'<span class="reasontag">⛔ previously not packed</span>':'')+'</button>';
+      h+='<button class="choice" data-do-pick="'+esc(o._key)+'"><span class="choicetop"><span class="trk">'+trkHi(o.trackingId, pendingChoice.code||'')+'</span>'+orderStatusTag(o)+'</span>'+
+         '<span class="sub">'+(o.items||[]).length+' item(s) · '+orderSummary(o)+'</span></button>';
     }
     h+='</div><div class="orderfoot"><button class="btn ghost" data-cancel-pick>Cancel</button></div></div>';
     area.innerHTML=h;
@@ -908,7 +984,7 @@ function buildReport(){
 function stat(n,l,cls){ return '<div class="stat '+(cls||'')+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'; }
 function renderReport(){
   const r=buildReport();
-  $('#reportTitle').innerHTML='Summary for <span class="mono">'+esc(S.date)+'</span>';
+  $('#reportTitle').innerHTML='Shift summary'+(S.date?' <span class="sub" style="font-size:15px">· since '+esc(S.date)+'</span>':'');
   $('#reportStats').innerHTML=stat(r.ordersPacked,'Orders packed','ok')+stat(r.ordersNotPacked,'Orders NOT packed',r.ordersNotPacked?'err':'')+stat(r.unitsPacked,'Units packed','ok')+stat(r.unitsNotPacked,'Units not packed',r.unitsNotPacked?'err':'');
   let b='';
   b+='<div class="tabsec"><h2>By platform</h2><table><thead><tr><th>Platform</th><th class="num">Packed</th><th class="num">Units</th><th class="num">Not packed</th></tr></thead><tbody>';
@@ -932,7 +1008,7 @@ function exportCSV(){
     rows.push([k,o.trackingId,it.name,it.variation,it.qty,ostatus,istatus,reason,o.packedBy||'']);
   }
   const csv=rows.map(r=>r.map(c=>{c=String(c==null?'':c);return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(',')).join('\r\n');
-  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pack_report_'+S.date+'.csv'; a.click(); URL.revokeObjectURL(a.href);
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pack_report_'+TODAY+'.csv'; a.click(); URL.revokeObjectURL(a.href);
 }
 
 /* ============================================================
@@ -982,6 +1058,7 @@ $('#continueBtn').onclick=()=>goPlatforms();
 // scan
 $('#scan').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();handleScan($('#scan').value);} });
 $('#scanGo').onclick=()=>handleScan($('#scan').value);
+$('#showAllBtn').onclick=()=>{ if(activePick){ toast('Finish or cancel the current order first','warn',2600); return; } pendingChoice={type:'all'}; renderOrderArea(); };
 
 // nav
 $('#backBtn').onclick=()=>goPlatforms();
